@@ -1,6 +1,13 @@
 <?php
 
 return [
+    // Operational state this module writes at runtime (OAuth tokens, seller
+    // defaults, diagnostics, sync cursors) — claimed so the residue scanner
+    // knows an installed Marketplace module owns these rows.
+    'runtime' => [
+        'commerce.marketplace.ebay.*',
+    ],
+
     'editable' => [
         'commerce_marketplace_ebay' => [
             'label' => 'eBay',
