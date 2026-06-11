@@ -76,10 +76,10 @@ class EbayAccountSetupCommand extends Command
 
             $importer->import($companyId);
 
-            $this->saveDefault($settings, $scope, 'marketplace.ebay.default_payment_policy_id', $policyIds['payment'] ?? null, 'payment policy');
-            $this->saveDefault($settings, $scope, 'marketplace.ebay.default_return_policy_id', $policyIds['return'] ?? null, 'return policy');
-            $this->saveDefault($settings, $scope, 'marketplace.ebay.default_fulfillment_policy_id', $policyIds['fulfillment'] ?? null, 'fulfillment policy');
-            $settings->set('marketplace.ebay.default_merchant_location_key', $locationKey, $scope);
+            $this->saveDefault($settings, $scope, 'commerce.marketplace.ebay.default_payment_policy_id', $policyIds['payment'] ?? null, 'payment policy');
+            $this->saveDefault($settings, $scope, 'commerce.marketplace.ebay.default_return_policy_id', $policyIds['return'] ?? null, 'return policy');
+            $this->saveDefault($settings, $scope, 'commerce.marketplace.ebay.default_fulfillment_policy_id', $policyIds['fulfillment'] ?? null, 'fulfillment policy');
+            $settings->set('commerce.marketplace.ebay.default_merchant_location_key', $locationKey, $scope);
             $this->components->info("Saved default merchant location: {$locationKey}.");
         } catch (Throwable $exception) {
             $this->components->error("Company {$companyId}: {$exception->getMessage()}");

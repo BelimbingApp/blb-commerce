@@ -40,14 +40,14 @@ class EbayConfiguration
     public function forCompany(int $companyId): array
     {
         $scope = Scope::company($companyId);
-        $environment = (string) $this->settings->get('marketplace.ebay.environment', 'sandbox', $scope);
+        $environment = (string) $this->settings->get('commerce.marketplace.ebay.environment', 'sandbox', $scope);
 
         return [
             'environment' => $environment,
-            'marketplace_id' => strtoupper((string) $this->settings->get('marketplace.ebay.marketplace_id', self::DEFAULT_LISTING_MARKETPLACE_ID, $scope)),
-            'client_id' => $this->nullableSetting('marketplace.ebay.client_id', $scope),
-            'client_secret' => $this->nullableSetting('marketplace.ebay.client_secret', $scope),
-            'redirect_uri' => $this->nullableSetting('marketplace.ebay.ru_name', $scope),
+            'marketplace_id' => strtoupper((string) $this->settings->get('commerce.marketplace.ebay.marketplace_id', self::DEFAULT_LISTING_MARKETPLACE_ID, $scope)),
+            'client_id' => $this->nullableSetting('commerce.marketplace.ebay.client_id', $scope),
+            'client_secret' => $this->nullableSetting('commerce.marketplace.ebay.client_secret', $scope),
+            'redirect_uri' => $this->nullableSetting('commerce.marketplace.ebay.ru_name', $scope),
             'callback_url' => route('commerce.marketplace.ebay.oauth.callback'),
             'scopes' => $this->scopes($scope),
             'api_base_url' => $environment === 'live' ? 'https://api.ebay.com' : 'https://api.sandbox.ebay.com',
@@ -65,7 +65,7 @@ class EbayConfiguration
 
         foreach (['client_id', 'client_secret', 'redirect_uri'] as $key) {
             if ($config[$key] === null || $config[$key] === '') {
-                $settingKey = $key === 'redirect_uri' ? 'marketplace.ebay.ru_name' : 'marketplace.ebay.'.$key;
+                $settingKey = $key === 'redirect_uri' ? 'commerce.marketplace.ebay.ru_name' : 'commerce.marketplace.ebay.'.$key;
 
                 throw MarketplaceOperationException::missingConfiguration(self::CHANNEL, $settingKey);
             }
@@ -95,7 +95,7 @@ class EbayConfiguration
 
         foreach (['client_id', 'client_secret'] as $key) {
             if ($config[$key] === null || $config[$key] === '') {
-                throw MarketplaceOperationException::missingConfiguration(self::CHANNEL, 'marketplace.ebay.'.$key);
+                throw MarketplaceOperationException::missingConfiguration(self::CHANNEL, 'commerce.marketplace.ebay.'.$key);
             }
         }
 
@@ -117,7 +117,7 @@ class EbayConfiguration
      */
     private function scopes(Scope $scope): array
     {
-        $raw = $this->settings->get('marketplace.ebay.scopes', '', $scope);
+        $raw = $this->settings->get('commerce.marketplace.ebay.scopes', '', $scope);
         $parts = is_array($raw)
             ? $raw
             : preg_split('/\s+/', trim((string) $raw));

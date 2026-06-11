@@ -56,7 +56,7 @@ test('eBay listing readiness records blockers on the durable draft', function ()
 
 test('eBay listing readiness uses plugin template mapping defaults', function (): void {
     $user = createAdminUser();
-    app(SettingsService::class)->set('marketplace.ebay.marketplace_id', 'EBAY_US', Scope::company($user->company_id));
+    app(SettingsService::class)->set('commerce.marketplace.ebay.marketplace_id', 'EBAY_US', Scope::company($user->company_id));
 
     app(CommercePluginRegistry::class)->registerMarketplaceTemplateMapping([
         'id' => 'test.ebay.plugin-template',
@@ -90,11 +90,11 @@ function seedMappedEbayReadinessItem(int $companyId): Item
 {
     $scope = Scope::company($companyId);
     $settings = app(SettingsService::class);
-    $settings->set('marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
-    $settings->set('marketplace.ebay.default_return_policy_id', 'RET-1', $scope);
-    $settings->set('marketplace.ebay.default_fulfillment_policy_id', 'FUL-1', $scope);
-    $settings->set('marketplace.ebay.default_payment_policy_id', 'PAY-1', $scope);
-    $settings->set('marketplace.ebay.default_merchant_location_key', 'california_shop', $scope);
+    $settings->set('commerce.marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
+    $settings->set('commerce.marketplace.ebay.default_return_policy_id', 'RET-1', $scope);
+    $settings->set('commerce.marketplace.ebay.default_fulfillment_policy_id', 'FUL-1', $scope);
+    $settings->set('commerce.marketplace.ebay.default_payment_policy_id', 'PAY-1', $scope);
+    $settings->set('commerce.marketplace.ebay.default_merchant_location_key', 'california_shop', $scope);
     app(OAuthTokenStore::class)->persist(
         EbayConfiguration::CHANNEL,
         $scope,
@@ -248,7 +248,7 @@ test('eBay listing readiness uses template mapping policies aspects and product 
 test('eBay listing readiness blocks invalid mapped enum values', function (): void {
     $user = createAdminUser();
     $scope = Scope::company($user->company_id);
-    app(SettingsService::class)->set('marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
+    app(SettingsService::class)->set('commerce.marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
 
     $template = ProductTemplate::factory()->create([
         'company_id' => $user->company_id,

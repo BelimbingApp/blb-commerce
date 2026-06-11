@@ -2,7 +2,7 @@
 
 return [
     'editable' => [
-        'marketplace_ebay' => [
+        'commerce_marketplace_ebay' => [
             'label' => 'eBay',
             'description' => 'Connect the eBay marketplace channel: app credentials and OAuth scopes, seller defaults, and template category mappings.',
             'help_title' => 'How to configure eBay OAuth',
@@ -24,7 +24,7 @@ return [
             ],
             'fields' => [
                 [
-                    'key' => 'marketplace.ebay.environment',
+                    'key' => 'commerce.marketplace.ebay.environment',
                     'label' => 'Environment',
                     'type' => 'select',
                     'scope' => 'company',
@@ -34,7 +34,7 @@ return [
                     'rules' => ['required', 'in:sandbox,live'],
                 ],
                 [
-                    'key' => 'marketplace.ebay.marketplace_id',
+                    'key' => 'commerce.marketplace.ebay.marketplace_id',
                     'label' => 'Marketplace ID',
                     'type' => 'select',
                     'scope' => 'company',
@@ -65,7 +65,7 @@ return [
                     'normalize' => 'uppercase',
                 ],
                 [
-                    'key' => 'marketplace.ebay.client_id',
+                    'key' => 'commerce.marketplace.ebay.client_id',
                     'label' => 'App ID (Client ID)',
                     'type' => 'text',
                     'scope' => 'company',
@@ -74,7 +74,7 @@ return [
                     'rules' => ['nullable', 'string', 'max:255'],
                 ],
                 [
-                    'key' => 'marketplace.ebay.client_secret',
+                    'key' => 'commerce.marketplace.ebay.client_secret',
                     'label' => 'Cert ID (Client secret)',
                     'type' => 'password',
                     'scope' => 'company',
@@ -84,7 +84,7 @@ return [
                     'rules' => ['nullable', 'string', 'max:500'],
                 ],
                 [
-                    'key' => 'marketplace.ebay.ru_name',
+                    'key' => 'commerce.marketplace.ebay.ru_name',
                     'label' => 'Redirect URL name (RuName)',
                     'type' => 'text',
                     'scope' => 'company',
@@ -93,14 +93,14 @@ return [
                     'rules' => ['nullable', 'string', 'max:255'],
                 ],
                 [
-                    'key' => 'marketplace.ebay.callback_url',
+                    'key' => 'commerce.marketplace.ebay.callback_url',
                     'label' => 'Belimbing Callback URL',
                     'type' => 'readonly',
                     'value_route' => 'commerce.marketplace.ebay.oauth.callback',
                     'help' => 'Copy this URL into both Auth Accepted URL and Auth Declined URL for the eBay RuName.',
                 ],
                 [
-                    'key' => 'marketplace.ebay.scopes',
+                    'key' => 'commerce.marketplace.ebay.scopes',
                     'label' => 'OAuth scopes',
                     'type' => 'checkbox-list',
                     'advanced' => true,

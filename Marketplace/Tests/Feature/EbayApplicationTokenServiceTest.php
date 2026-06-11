@@ -13,10 +13,10 @@ function configureEbayApplicationTokenEnvironment(int $companyId): void
 {
     $scope = Scope::company($companyId);
     $settings = app(SettingsService::class);
-    $settings->set('marketplace.ebay.environment', 'sandbox', $scope);
-    $settings->set('marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
-    $settings->set('marketplace.ebay.client_id', 'client-application-test', $scope);
-    $settings->set('marketplace.ebay.client_secret', 'secret-application-test', $scope, encrypted: true);
+    $settings->set('commerce.marketplace.ebay.environment', 'sandbox', $scope);
+    $settings->set('commerce.marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
+    $settings->set('commerce.marketplace.ebay.client_id', 'client-application-test', $scope);
+    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-application-test', $scope, encrypted: true);
 }
 
 test('requests and stores an eBay application token for metadata APIs', function (): void {

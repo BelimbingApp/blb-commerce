@@ -26,7 +26,7 @@ class EbayMarketplaceChannelProvider implements MarketplaceChannelProvider
                 'settings' => 'commerce.marketplace.ebay.settings',
                 'oauth_callback' => 'commerce.marketplace.ebay.oauth.callback',
             ],
-            settingsGroup: 'marketplace_ebay',
+            settingsGroup: 'commerce_marketplace_ebay',
             icon: 'heroicon-o-globe-alt',
         ));
     }

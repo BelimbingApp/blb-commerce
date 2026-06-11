@@ -38,7 +38,7 @@ class EbayDiagnosticsService
 
     public const STATUS_FAILED = 'failed';
 
-    public const SETTINGS_KEY = 'marketplace.ebay.diagnostics';
+    public const SETTINGS_KEY = 'commerce.marketplace.ebay.diagnostics';
 
     /**
      * Scopes that satisfy each probe scope group. A probe is runnable if the

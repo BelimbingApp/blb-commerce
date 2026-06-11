@@ -22,7 +22,7 @@ class EbayOAuthService
     {
         $config = $this->configuration->requireConfigured($companyId);
         $state = Str::random(40);
-        session(['marketplace.ebay.oauth_state' => $state]);
+        session(['commerce.marketplace.ebay.oauth_state' => $state]);
 
         return $this->oauth->authorizationUrl(
             $config['auth_url'],
@@ -67,7 +67,7 @@ class EbayOAuthService
         $token = $this->tokens->find(EbayConfiguration::CHANNEL, $scope);
 
         if (! $token instanceof OAuthToken || $token->refresh_token === null) {
-            throw MarketplaceOperationException::missingConfiguration(EbayConfiguration::CHANNEL, 'marketplace.ebay.oauth_token');
+            throw MarketplaceOperationException::missingConfiguration(EbayConfiguration::CHANNEL, 'commerce.marketplace.ebay.oauth_token');
         }
 
         if (! $token->isExpired() && $token->access_token !== null) {

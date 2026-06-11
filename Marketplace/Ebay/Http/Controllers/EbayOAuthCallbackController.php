@@ -16,7 +16,7 @@ class EbayOAuthCallbackController
             abort(403);
         }
 
-        if (! hash_equals((string) session('marketplace.ebay.oauth_state'), (string) $request->query('state'))) {
+        if (! hash_equals((string) session('commerce.marketplace.ebay.oauth_state'), (string) $request->query('state'))) {
             abort(403);
         }
 
@@ -28,8 +28,8 @@ class EbayOAuthCallbackController
         }
 
         $oauth->exchangeCode($companyId, $code);
-        session()->forget('marketplace.ebay.oauth_state');
-        $returnRoute = (string) session()->pull('marketplace.ebay.oauth_return_route', 'commerce.marketplace.ebay.index');
+        session()->forget('commerce.marketplace.ebay.oauth_state');
+        $returnRoute = (string) session()->pull('commerce.marketplace.ebay.oauth_return_route', 'commerce.marketplace.ebay.index');
 
         return redirect()
             ->route($returnRoute)

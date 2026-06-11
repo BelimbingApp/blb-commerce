@@ -41,11 +41,11 @@ function configureEbayMarketplaceForCompany(int $companyId, array $scopes): void
 {
     $scope = Scope::company($companyId);
     $settings = app(SettingsService::class);
-    $settings->set('marketplace.ebay.environment', 'sandbox', $scope);
-    $settings->set('marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
-    $settings->set('marketplace.ebay.client_id', 'client-123', $scope);
-    $settings->set('marketplace.ebay.client_secret', 'secret-456', $scope, encrypted: true);
-    $settings->set('marketplace.ebay.redirect_uri', 'https://blb.test/commerce/marketplace/ebay/oauth/callback', $scope);
+    $settings->set('commerce.marketplace.ebay.environment', 'sandbox', $scope);
+    $settings->set('commerce.marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
+    $settings->set('commerce.marketplace.ebay.client_id', 'client-123', $scope);
+    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-456', $scope, encrypted: true);
+    $settings->set('commerce.marketplace.ebay.redirect_uri', 'https://blb.test/commerce/marketplace/ebay/oauth/callback', $scope);
 
     app(OAuthTokenStore::class)->persist(
         EbayConfiguration::CHANNEL,
@@ -63,10 +63,10 @@ function seedReadyEbayListingInputs(Item $item, int $companyId): void
 {
     $scope = Scope::company($companyId);
     $settings = app(SettingsService::class);
-    $settings->set('marketplace.ebay.default_return_policy_id', 'RET-1', $scope);
-    $settings->set('marketplace.ebay.default_fulfillment_policy_id', 'FUL-1', $scope);
-    $settings->set('marketplace.ebay.default_payment_policy_id', 'PAY-1', $scope);
-    $settings->set('marketplace.ebay.default_merchant_location_key', 'california_shop', $scope);
+    $settings->set('commerce.marketplace.ebay.default_return_policy_id', 'RET-1', $scope);
+    $settings->set('commerce.marketplace.ebay.default_fulfillment_policy_id', 'FUL-1', $scope);
+    $settings->set('commerce.marketplace.ebay.default_payment_policy_id', 'PAY-1', $scope);
+    $settings->set('commerce.marketplace.ebay.default_merchant_location_key', 'california_shop', $scope);
 
     $template = ProductTemplate::factory()->create([
         'company_id' => $companyId,
@@ -1198,7 +1198,7 @@ test('ebay registers as a marketplace channel provider', function (): void {
 
     expect($descriptor->key)->toBe(EbayConfiguration::CHANNEL)
         ->and($descriptor->label)->toBe('eBay')
-        ->and($descriptor->settingsGroup)->toBe('marketplace_ebay')
+        ->and($descriptor->settingsGroup)->toBe('commerce_marketplace_ebay')
         ->and($descriptor->supports('pull_listings'))->toBeTrue()
         ->and($descriptor->supports('create_listing'))->toBeTrue()
         ->and(app(MarketplaceChannelRegistry::class)->channel(EbayConfiguration::CHANNEL))

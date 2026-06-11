@@ -171,15 +171,15 @@ class EbayListingReadinessService
         $scope = Scope::company($companyId);
 
         return [
-            'return' => $this->nullableSetting('marketplace.ebay.default_return_policy_id', $scope),
-            'fulfillment' => $this->nullableSetting('marketplace.ebay.default_fulfillment_policy_id', $scope),
-            'payment' => $this->nullableSetting('marketplace.ebay.default_payment_policy_id', $scope),
+            'return' => $this->nullableSetting('commerce.marketplace.ebay.default_return_policy_id', $scope),
+            'fulfillment' => $this->nullableSetting('commerce.marketplace.ebay.default_fulfillment_policy_id', $scope),
+            'payment' => $this->nullableSetting('commerce.marketplace.ebay.default_payment_policy_id', $scope),
         ];
     }
 
     private function merchantLocationKey(int $companyId): ?string
     {
-        return $this->nullableSetting('marketplace.ebay.default_merchant_location_key', Scope::company($companyId));
+        return $this->nullableSetting('commerce.marketplace.ebay.default_merchant_location_key', Scope::company($companyId));
     }
 
     private function nullableSetting(string $key, Scope $scope): ?string

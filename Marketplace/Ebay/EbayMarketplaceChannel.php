@@ -148,7 +148,7 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         }
 
         // Advance the incremental watermark only after a clean pass.
-        $this->settings->set('marketplace.ebay.orders_synced_through', $pullStartedAt->clone()->utc()->format(self::EBAY_DATE_FORMAT), $scope);
+        $this->settings->set('commerce.marketplace.ebay.orders_synced_through', $pullStartedAt->clone()->utc()->format(self::EBAY_DATE_FORMAT), $scope);
 
         return new MarketplacePullResult(
             $this->key(),
@@ -464,7 +464,7 @@ class EbayMarketplaceChannel implements MarketplaceChannel
     {
         $query = ['limit' => $limit, 'offset' => $offset];
 
-        $watermark = $this->settings->get('marketplace.ebay.orders_synced_through', null, $scope);
+        $watermark = $this->settings->get('commerce.marketplace.ebay.orders_synced_through', null, $scope);
 
         if (is_string($watermark) && trim($watermark) !== '') {
             $since = Carbon::parse($watermark)->subMinutes(5)->utc()->format(self::EBAY_DATE_FORMAT);

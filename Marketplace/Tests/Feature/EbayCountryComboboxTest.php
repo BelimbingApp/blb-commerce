@@ -9,8 +9,8 @@ use Livewire\Livewire;
 test('eBay Step 2 country selector still stores a 2-letter ISO via the combobox', function (): void {
     $user = createAdminUser();
     $scope = Scope::company($user->company_id);
-    app(SettingsService::class)->set('marketplace.ebay.environment', 'sandbox', $scope);
-    app(SettingsService::class)->set('marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
+    app(SettingsService::class)->set('commerce.marketplace.ebay.environment', 'sandbox', $scope);
+    app(SettingsService::class)->set('commerce.marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
 
     Http::fake(function ($request) {
         return match (true) {
