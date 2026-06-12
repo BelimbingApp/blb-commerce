@@ -1,8 +1,14 @@
 <?php
+use App\Modules\Commerce\Marketplace\Ebay\Http\Controllers\EbayAccountDeletionController;
 use App\Modules\Commerce\Marketplace\Ebay\Http\Controllers\EbayOAuthCallbackController;
 use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
 use App\Modules\Commerce\Marketplace\Livewire\Ebay\Settings;
 use Illuminate\Support\Facades\Route;
+
+// Public, unauthenticated: eBay's servers call this through the tunnel.
+// CSRF is exempted for webhooks/* in bootstrap/app.php.
+Route::match(['get', 'post'], 'webhooks/ebay/account-deletion', EbayAccountDeletionController::class)
+    ->name('commerce.marketplace.ebay.webhooks.account-deletion');
 
 Route::middleware(['auth'])->group(function (): void {
     Route::get('commerce/marketplace/ebay', Index::class)
