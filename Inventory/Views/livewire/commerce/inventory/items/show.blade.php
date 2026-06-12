@@ -275,10 +275,11 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                     </div>
 
                     @if ($this->canEdit())
-                        <form wire:submit="saveCatalogAssignment" class="grid grid-cols-1 gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end">
+                        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <x-ui.select
                                 id="item-catalog-category"
-                                wire:model.live="catalogCategoryId"
+                                wire:model="catalogCategoryId"
+                                wire:blur="saveCatalogAssignment"
                                 label="{{ __('Category') }}"
                                 :help="__('Broad reusable group for this sellable item.')"
                                 :error="$errors->first('catalogCategoryId')"
@@ -291,7 +292,8 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 
                             <x-ui.select
                                 id="item-catalog-template"
-                                wire:model.live="catalogProductTemplateId"
+                                wire:model="catalogProductTemplateId"
+                                wire:blur="saveCatalogAssignment"
                                 label="{{ __('Template') }}"
                                 :help="__('Repeatable item type. Choosing a categorized template also selects its category.')"
                                 :error="$errors->first('catalogProductTemplateId')"
@@ -307,12 +309,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                     </option>
                                 @endforeach
                             </x-ui.select>
-
-                            <x-ui.button type="submit" variant="primary">
-                                <x-icon name="heroicon-o-check" class="h-4 w-4" />
-                                {{ __('Save Fit') }}
-                            </x-ui.button>
-                        </form>
+                        </div>
                     @else
                         <dl class="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div>
