@@ -26,13 +26,16 @@ class MarketplaceOperationException extends BlbIntegrationException
         return new self("Marketplace channel [{$channel}] resolved to invalid class [{$resolvedClass}].");
     }
 
-    public static function requestFailed(string $channel, string $operation, ?int $status = null, ?string $exchangeId = null): self
+    public static function requestFailed(string $channel, string $operation, ?int $status = null, ?string $exchangeId = null, ?string $detail = null): self
     {
         $suffix = $status !== null ? " (HTTP {$status})" : '';
+        // The channel's own error text is what the operator can act on; the
+        // exchange id alone forces a trip into the integration log.
+        $detail = $detail !== null && trim($detail) !== '' ? ' '.rtrim(trim($detail), '.').'.' : '';
         $exchange = $exchangeId !== null ? " Integration exchange [{$exchangeId}]." : '';
 
         return new self(
-            "Marketplace channel [{$channel}] request [{$operation}] failed{$suffix}.{$exchange}",
+            "Marketplace channel [{$channel}] request [{$operation}] failed{$suffix}.{$detail}{$exchange}",
             context: array_filter([
                 'status' => $status,
                 'exchange_id' => $exchangeId,

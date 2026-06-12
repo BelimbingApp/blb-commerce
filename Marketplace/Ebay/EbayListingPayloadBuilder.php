@@ -177,9 +177,12 @@ class EbayListingPayloadBuilder
 
         if ($brand !== null) {
             $identifiers['brand'] = $brand;
-        }
-
-        if ($mpn !== null) {
+            // eBay validates brand and MPN as a pair (publish fails on tag
+            // <BrandMPN> otherwise). Used parts often have no distinct MPN, so
+            // send eBay's accepted "Does Not Apply" placeholder when none is
+            // mapped.
+            $identifiers['mpn'] = $mpn ?? 'Does Not Apply';
+        } elseif ($mpn !== null) {
             $identifiers['mpn'] = $mpn;
         }
 

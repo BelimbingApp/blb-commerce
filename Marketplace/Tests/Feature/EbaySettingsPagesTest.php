@@ -358,28 +358,116 @@ test('eBay settings hides starter policies on the live environment', function ()
         ->assertDontSee('Create starter policies');
 });
 
-test('eBay settings saves template category mappings for readiness', function (): void {
+test('eBay settings saves a manual category mapping instantly and resolves the tree', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
+
+    $scope = Scope::company($user->company_id);
+    $settings = app(SettingsService::class);
+    $settings->set('commerce.marketplace.ebay.client_id', 'client-manual-test', $scope);
+    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-manual-test', $scope, encrypted: true);
+
+    app(OAuthTokenStore::class)->persist(
+        EbayConfiguration::CHANNEL,
+        $scope,
+        ['access_token' => 'application-token', 'expires_in' => 3600],
+        EbayConfiguration::APPLICATION_SCOPES,
+        EbayConfiguration::APPLICATION_TOKEN_ACCOUNT_KEY,
+        metadata: ['token_kind' => 'application'],
+    );
 
     $template = ProductTemplate::factory()->create([
         'company_id' => $user->company_id,
         'name' => 'Brake Caliper',
     ]);
 
+    Http::fake([
+        'https://api.sandbox.ebay.com/commerce/taxonomy/v1/get_default_category_tree_id*' => Http::response(['categoryTreeId' => '100']),
+        'https://api.sandbox.ebay.com/*' => Http::response([]),
+    ]);
+
+    // No Save button: the marketplace choice persists on change, the manual
+    // category persists from the picker, and the tree id is resolved from eBay.
     Livewire::test(EbaySettings::class)
         ->assertSee('eBay category mappings')
         ->assertSee('Brake Caliper')
         ->set("templateCategoryMappings.{$template->id}.marketplace_id", 'EBAY_MOTORS_US')
-        ->set("templateCategoryMappings.{$template->id}.category_tree_id", '100')
+        ->call('openCategoryPicker', $template->id)
         ->set("templateCategoryMappings.{$template->id}.category_id", '33563')
-        ->call('saveTemplateCategoryMappings')
-        ->assertHasNoErrors();
+        ->call('saveManualCategory')
+        ->assertHasNoErrors()
+        ->assertSet('categoryPickerOpen', false);
 
     expect(data_get($template->fresh()->metadata, 'marketplace.ebay'))->toBe([
         'marketplace_id' => 'EBAY_MOTORS_US',
+        'listing_marketplace_id' => 'EBAY_MOTORS',
         'category_tree_id' => '100',
         'category_id' => '33563',
+        'category_label' => null,
+    ]);
+});
+
+test('eBay settings finds categories by name and applies the chosen suggestion', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $scope = Scope::company($user->company_id);
+    $settings = app(SettingsService::class);
+    $settings->set('commerce.marketplace.ebay.client_id', 'client-suggest-test', $scope);
+    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-suggest-test', $scope, encrypted: true);
+
+    app(OAuthTokenStore::class)->persist(
+        EbayConfiguration::CHANNEL,
+        $scope,
+        ['access_token' => 'application-token', 'expires_in' => 3600],
+        EbayConfiguration::APPLICATION_SCOPES,
+        EbayConfiguration::APPLICATION_TOKEN_ACCOUNT_KEY,
+        metadata: ['token_kind' => 'application'],
+    );
+
+    $template = ProductTemplate::factory()->create([
+        'company_id' => $user->company_id,
+        'name' => 'Alternator',
+    ]);
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/commerce/taxonomy/v1/get_default_category_tree_id*' => Http::response(['categoryTreeId' => '100']),
+        'https://api.sandbox.ebay.com/commerce/taxonomy/v1/category_tree/100/get_category_suggestions*' => Http::response([
+            'categorySuggestions' => [
+                [
+                    'category' => ['categoryId' => '33573', 'categoryName' => 'Alternators & Generators'],
+                    'categoryTreeNodeAncestors' => [
+                        ['categoryName' => 'Charging & Starting Systems'],
+                        ['categoryName' => 'Car & Truck Parts & Accessories'],
+                        ['categoryName' => 'eBay Motors'],
+                    ],
+                ],
+            ],
+        ]),
+        'https://api.sandbox.ebay.com/*' => Http::response([]),
+    ]);
+
+    // Picking a suggestion saves the mapping immediately and closes the picker.
+    Livewire::test(EbaySettings::class)
+        ->set("templateCategoryMappings.{$template->id}.marketplace_id", 'EBAY_MOTORS_US')
+        ->call('openCategoryPicker', $template->id)
+        ->set('categorySearch', 'alternator')
+        ->call('searchEbayCategories')
+        ->assertHasNoErrors()
+        ->assertSee('Alternators & Generators')
+        ->assertSee('eBay Motors › Car & Truck Parts & Accessories › Charging & Starting Systems')
+        ->call('applyEbayCategorySuggestion', 0)
+        ->assertHasNoErrors()
+        ->assertSet("templateCategoryMappings.{$template->id}.category_id", '33573')
+        ->assertSet("templateCategoryMappings.{$template->id}.category_tree_id", '100')
+        ->assertSet('categoryPickerOpen', false);
+
+    expect(data_get($template->fresh()->metadata, 'marketplace.ebay'))->toBe([
+        'marketplace_id' => 'EBAY_MOTORS_US',
+        'listing_marketplace_id' => 'EBAY_MOTORS',
+        'category_tree_id' => '100',
+        'category_id' => '33573',
+        'category_label' => 'eBay Motors › Car & Truck Parts & Accessories › Charging & Starting Systems › Alternators & Generators',
     ]);
 });
 

@@ -14,6 +14,7 @@ use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Inventory\Models\ItemFitment;
 use App\Modules\Commerce\Inventory\Models\ItemPhoto;
 use App\Modules\Commerce\Inventory\Services\DefaultCurrencyResolver;
+use App\Modules\Commerce\Marketplace\Models\ListingDraft;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
@@ -183,7 +184,7 @@ test('authenticated users can view an inventory item detail page', function (): 
         ->assertSee('1450.00');
 });
 
-test('item detail page renders core readiness checklist from commerce plugins', function (): void {
+test('item detail page checks channel readiness on load and lists the gaps grouped', function (): void {
     $user = createAdminUser();
 
     $item = Item::factory()->create([
@@ -194,15 +195,23 @@ test('item detail page renders core readiness checklist from commerce plugins', 
         'target_price_amount' => null,
     ]);
 
+    // No draft exists yet: the page itself runs the readiness check and
+    // renders every blocker, grouped into item gaps and channel-setup gaps.
     $this->actingAs($user)
         ->get(route('commerce.inventory.items.show', $item))
         ->assertOk()
-        ->assertSee('Item checklist')
-        ->assertSee('Choose a catalog fit')
-        ->assertSee('Set a target price')
-        ->assertSee('Quantity is zero')
-        ->assertSee('Add item photos')
-        ->assertSee('Add listing copy');
+        ->assertSee('Set a target price.')
+        ->assertSee('Set quantity on hand above zero.')
+        ->assertSee('Add at least one photo.')
+        ->assertSee('This item')
+        ->assertSee('Channel setup')
+        ->assertSee('Connect eBay before publishing.');
+
+    expect(ListingDraft::query()
+        ->where('item_id', $item->id)
+        ->where('channel', 'ebay')
+        ->where('readiness_status', 'blocked')
+        ->exists())->toBeTrue();
 });
 
 test('item facts can be updated directly from the detail page component', function (): void {
@@ -356,22 +365,6 @@ test('item fitment requires either compatibility values or explicit universal fi
         ->and($fitment->compatibility_properties)->toBeNull();
 });
 
-test('item fitments can be imported in bulk rows', function (): void {
-    $user = createAdminUser();
-    $this->actingAs($user);
-
-    $item = Item::factory()->create(['company_id' => $user->company_id]);
-
-    Livewire::test(Show::class, ['item' => $item])
-        ->set('fitmentBulk', "2011,BMW,135i,Base Coupe,3.0L\n2012,BMW,135i,Base Coupe,3.0L")
-        ->call('importFitments')
-        ->assertHasNoErrors()
-        ->assertSee(INVENTORY_BMW_135I_FITMENT_LABEL)
-        ->assertSee('2012 BMW 135i');
-
-    expect(ItemFitment::query()->where('item_id', $item->id)->count())->toBe(2);
-});
-
 test('item fitments can be edited from the detail page component', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
@@ -499,6 +492,7 @@ test('item fitments can be copied from another item in the same company', functi
     ]);
 
     Livewire::test(Show::class, ['item' => $target])
+        ->call('openFitmentForm')
         ->assertSee('DONOR-135I')
         ->set('copyFitmentsFromItemId', $outsideCompanySource->id)
         ->call('copyFitmentsFromItem')

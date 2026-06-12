@@ -65,7 +65,10 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
             <div class="flex flex-wrap items-center gap-x-6 gap-y-3">
                 <div class="flex items-center gap-2">
                     <span class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Status') }}</span>
-                    <x-ui.badge :variant="$this->statusVariant($item->status)">{{ __(Illuminate\Support\Str::headline($item->status)) }}</x-ui.badge>
+                    {{-- Native title, not the badge tooltip prop: the tooltip teleports
+                         a fixed-position node to <body> that Livewire morphs orphan,
+                         leaving it stuck at the top-left of the page. --}}
+                    <x-ui.badge :variant="$this->statusVariant($item->status)" title="{{ __('Inventory lifecycle stage, set by you. Whether the item can actually go live is judged per channel in the Channels card.') }}">{{ __(Illuminate\Support\Str::headline($item->status)) }}</x-ui.badge>
                 </div>
 
                 <div class="flex items-center gap-2">
@@ -80,10 +83,10 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 
                 <div class="flex items-center gap-2">
                     <span class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Channels') }}</span>
-                    <x-ui.badge variant="accent">{{ __('Listed :count', ['count' => $listedChannelCount]) }}</x-ui.badge>
-                    <x-ui.badge :variant="$readyChannelCount > 0 ? 'success' : 'default'">{{ __('Ready :count', ['count' => $readyChannelCount]) }}</x-ui.badge>
+                    <a href="#listing-channels"><x-ui.badge variant="accent">{{ __('Listed :count', ['count' => $listedChannelCount]) }}</x-ui.badge></a>
+                    <a href="#listing-channels"><x-ui.badge :variant="$readyChannelCount > 0 ? 'success' : 'default'">{{ __('Ready :count', ['count' => $readyChannelCount]) }}</x-ui.badge></a>
                     @if ($blockedChannelCount > 0)
-                        <x-ui.badge variant="warning">{{ __('Blocked :count', ['count' => $blockedChannelCount]) }}</x-ui.badge>
+                        <a href="#listing-channels"><x-ui.badge variant="warning">{{ __('Blocked :count', ['count' => $blockedChannelCount]) }}</x-ui.badge></a>
                     @endif
                 </div>
             </div>
@@ -91,7 +94,9 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div class="lg:col-span-2 space-y-6">
-                <x-ui.card id="item-facts">
+                {{-- Anchored cards: blocker links jump here, so give the jump headroom
+                     and a :target ring that shows which card the link meant. --}}
+                <x-ui.card id="item-facts" class="scroll-mt-24 target:ring-2 target:ring-accent/60">
                     <div class="mb-4 flex items-start justify-between gap-3">
                         <div>
                             <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Details') }}</h2>
@@ -257,7 +262,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                     @endif
                 </x-ui.card>
 
-                <x-ui.card id="catalog-fit">
+                <x-ui.card id="catalog-fit" class="scroll-mt-24 target:ring-2 target:ring-accent/60">
                     <div class="mb-3 flex items-center justify-between gap-3">
                         <div>
                             <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Catalog Fit') }}</h2>
@@ -348,7 +353,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                     @endif
                 </x-ui.card>
 
-                <x-ui.card id="fitment">
+                <x-ui.card id="fitment" class="scroll-mt-24 target:ring-2 target:ring-accent/60">
                     <div class="mb-3 flex items-center justify-between gap-3">
                         <div>
                             <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Fitment') }}</h2>
@@ -419,114 +424,92 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                     @endif
 
                     @if ($this->canEdit())
-                        <div class="mt-4 space-y-4 border-t border-border-default pt-4">
-                            <form wire:submit="{{ $editingFitmentId === null ? 'addFitment' : 'updateFitment' }}" class="space-y-4">
-                                @if ($editingFitmentId !== null)
-                                    <x-ui.alert variant="info">
-                                        {{ __('Editing fitment entry. Save changes or cancel before adding another entry.') }}
-                                    </x-ui.alert>
-                                @endif
-
-                                <x-ui.checkbox
-                                    id="item-fitment-universal"
-                                    wire:model.live="fitmentUniversal"
-                                    :label="__('Universal fit')"
-                                    :help="__('Use only when the part intentionally fits broadly and does not need vehicle-specific compatibility.')"
-                                />
-
-                                @unless ($fitmentUniversal)
-                                    <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-                                        <x-ui.input id="item-fitment-year" wire:model="fitmentYear" :label="__('Year')" :error="$errors->first('fitmentYear')" />
-                                        <x-ui.input id="item-fitment-make" wire:model="fitmentMake" :label="__('Make')" :error="$errors->first('fitmentMake')" />
-                                        <x-ui.input id="item-fitment-model" wire:model="fitmentModel" :label="__('Model')" :error="$errors->first('fitmentModel')" />
-                                        <x-ui.input id="item-fitment-trim" wire:model="fitmentTrim" :label="__('Trim')" :error="$errors->first('fitmentTrim')" />
-                                        <x-ui.input id="item-fitment-engine" wire:model="fitmentEngine" :label="__('Engine')" :error="$errors->first('fitmentEngine')" />
-                                    </div>
-                                @endunless
-
-                                <x-ui.textarea
-                                    id="item-fitment-notes"
-                                    wire:model="fitmentNotes"
-                                    :label="__('Fitment notes')"
-                                    rows="2"
-                                    :help="__('Optional source or qualifier for this compatibility claim.')"
-                                    :error="$errors->first('fitmentNotes')"
-                                />
-
+                        <div class="mt-4 border-t border-border-default pt-4">
+                            {{-- The form only appears on demand: most visits read the list. --}}
+                            @unless ($fitmentFormOpen)
                                 <div class="flex flex-wrap items-center gap-2">
-                                    <x-ui.button type="submit" variant="primary" size="sm">
-                                        <x-icon name="{{ $editingFitmentId === null ? 'heroicon-o-plus' : 'heroicon-o-check' }}" class="h-4 w-4" />
-                                        {{ $editingFitmentId === null ? __('Add fitment') : __('Save fitment') }}
+                                    <x-ui.button type="button" variant="outline" size="sm" wire:click="openFitmentForm">
+                                        <x-icon name="heroicon-o-plus" class="h-4 w-4" />
+                                        {{ __('Add fitment') }}
                                     </x-ui.button>
 
-                                    @if ($editingFitmentId !== null)
-                                        <x-ui.button type="button" variant="ghost" size="sm" wire:click="cancelFitmentEdit">
-                                            {{ __('Cancel') }}
+                                    @if ($canBootstrapFitmentFromAttributes)
+                                        <x-ui.button type="button" variant="outline" size="sm" wire:click="bootstrapFitmentFromAttributes" title="{{ __('Create one fitment entry from this item’s year, make, model, trim, and engine attributes.') }}">
+                                            <x-icon name="heroicon-o-sparkles" class="h-4 w-4" />
+                                            {{ __('Create from attributes') }}
                                         </x-ui.button>
                                     @endif
                                 </div>
-                            </form>
+                            @else
+                                <form wire:submit="{{ $editingFitmentId === null ? 'addFitment' : 'updateFitment' }}" class="space-y-4">
+                                    <x-ui.checkbox
+                                        id="item-fitment-universal"
+                                        wire:model.live="fitmentUniversal"
+                                        :label="__('Universal fit')"
+                                        :help="__('Use only when the part intentionally fits broadly and does not need vehicle-specific compatibility.')"
+                                    />
 
-                            @if ($editingFitmentId === null && ($canBootstrapFitmentFromAttributes || $fitmentSourceItems->isNotEmpty()))
-                                <div class="grid gap-4 border-t border-border-default pt-4 lg:grid-cols-2">
-                                    @if ($canBootstrapFitmentFromAttributes)
-                                        <div class="space-y-2">
-                                            <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Bootstrap') }}</p>
-                                            <p class="text-sm text-muted">{{ __('Create one fitment entry from configured item attributes such as year, make, model, trim, and engine.') }}</p>
-                                            <x-ui.button type="button" variant="outline" size="sm" wire:click="bootstrapFitmentFromAttributes">
-                                                <x-icon name="heroicon-o-sparkles" class="h-4 w-4" />
-                                                {{ __('Create from attributes') }}
-                                            </x-ui.button>
+                                    @unless ($fitmentUniversal)
+                                        <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                                            <x-ui.input id="item-fitment-year" wire:model="fitmentYear" :label="__('Year')" :error="$errors->first('fitmentYear')" />
+                                            <x-ui.input id="item-fitment-make" wire:model="fitmentMake" :label="__('Make')" :error="$errors->first('fitmentMake')" />
+                                            <x-ui.input id="item-fitment-model" wire:model="fitmentModel" :label="__('Model')" :error="$errors->first('fitmentModel')" />
+                                            <x-ui.input id="item-fitment-trim" wire:model="fitmentTrim" :label="__('Trim')" :error="$errors->first('fitmentTrim')" />
+                                            <x-ui.input id="item-fitment-engine" wire:model="fitmentEngine" :label="__('Engine')" :error="$errors->first('fitmentEngine')" />
                                         </div>
-                                    @endif
+                                    @endunless
 
-                                    @if ($fitmentSourceItems->isNotEmpty())
-                                        <form wire:submit="copyFitmentsFromItem" class="space-y-3">
-                                            <x-ui.combobox
-                                                id="item-fitment-copy-source"
-                                                wire:model="copyFitmentsFromItemId"
-                                                :label="__('Copy fitment from item')"
-                                                :placeholder="__('Search by SKU or title')"
-                                                :options="$fitmentSourceItems->map(fn ($source) => [
-                                                    'value' => (string) $source->id,
-                                                    'label' => $source->sku . ' — ' . $source->title . ' (' . trans_choice(':count entry|:count entries', $source->fitments_count, ['count' => $source->fitments_count]) . ')',
-                                                ])->all()"
-                                                :error="$errors->first('copyFitmentsFromItemId')"
-                                            />
+                                    <x-ui.textarea
+                                        id="item-fitment-notes"
+                                        wire:model="fitmentNotes"
+                                        :label="__('Fitment notes')"
+                                        rows="2"
+                                        :help="__('Optional source or qualifier for this compatibility claim.')"
+                                        :error="$errors->first('fitmentNotes')"
+                                    />
 
-                                            <x-ui.button type="submit" variant="outline" size="sm">
-                                                <x-icon name="heroicon-o-clipboard-document" class="h-4 w-4" />
-                                                {{ __('Copy fitment') }}
-                                            </x-ui.button>
-                                        </form>
-                                    @endif
-                                </div>
-                            @endif
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <x-ui.button type="submit" variant="primary" size="sm">
+                                            <x-icon name="{{ $editingFitmentId === null ? 'heroicon-o-plus' : 'heroicon-o-check' }}" class="h-4 w-4" />
+                                            {{ $editingFitmentId === null ? __('Add fitment') : __('Save fitment') }}
+                                        </x-ui.button>
 
-                            <form wire:submit="importFitments" class="space-y-3 border-t border-border-default pt-4">
-                                <x-ui.textarea
-                                    id="item-fitment-bulk"
-                                    wire:model="fitmentBulk"
-                                    :label="__('Bulk fitment')"
-                                    rows="4"
-                                    :help="__('One row per vehicle/application: Year, Make, Model, Trim, Engine, Notes. CSV quoting is supported.')"
-                                    :error="$errors->first('fitmentBulk')"
-                                />
+                                        <x-ui.button type="button" variant="ghost" size="sm" wire:click="cancelFitmentEdit">
+                                            {{ __('Cancel') }}
+                                        </x-ui.button>
+                                    </div>
+                                </form>
 
-                                <x-ui.button type="submit" variant="outline" size="sm">
-                                    <x-icon name="heroicon-o-arrow-up-tray" class="h-4 w-4" />
-                                    {{ __('Import fitment rows') }}
-                                </x-ui.button>
-                            </form>
+                                @if ($editingFitmentId === null && $fitmentSourceItems->isNotEmpty())
+                                    <form wire:submit="copyFitmentsFromItem" class="mt-4 space-y-3 border-t border-border-default pt-4">
+                                        <x-ui.combobox
+                                            id="item-fitment-copy-source"
+                                            wire:model="copyFitmentsFromItemId"
+                                            :label="__('Or copy fitment from another item')"
+                                            :placeholder="__('Search by SKU or title')"
+                                            :options="$fitmentSourceItems->map(fn ($source) => [
+                                                'value' => (string) $source->id,
+                                                'label' => $source->sku . ' — ' . $source->title . ' (' . trans_choice(':count entry|:count entries', $source->fitments_count, ['count' => $source->fitments_count]) . ')',
+                                            ])->all()"
+                                            :error="$errors->first('copyFitmentsFromItemId')"
+                                        />
+
+                                        <x-ui.button type="submit" variant="outline" size="sm">
+                                            <x-icon name="heroicon-o-clipboard-document" class="h-4 w-4" />
+                                            {{ __('Copy fitment') }}
+                                        </x-ui.button>
+                                    </form>
+                                @endif
+                            @endunless
                         </div>
                     @endif
                 </x-ui.card>
             </div>
 
             <div class="space-y-6">
-                <x-ui.card id="listing-channels" x-data="{ helpOpen: false }">
+                <x-ui.card id="listing-channels" class="scroll-mt-24 target:ring-2 target:ring-accent/60" x-data="{ helpOpen: false }">
                     <div class="mb-4 flex items-center gap-2">
-                        <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Listing & Channels') }}</h2>
+                        <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Channels') }}</h2>
                         <x-ui.help @click="helpOpen = ! helpOpen" ::aria-expanded="helpOpen" />
                     </div>
 
@@ -542,8 +525,8 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                         <div class="space-y-2 p-4">
                             <p>{{ __('Publish or update this one item on each marketplace — this is the push side of the workflow.') }}</p>
                             <p>{{ __('Pulling listings and orders in from a marketplace happens on that channel’s own page. Here you push this item out, one channel at a time, once it is ready.') }}</p>
-                            <p><span class="font-medium text-ink">{{ __('Recheck') }}</span> — {{ __('re-runs that channel’s readiness check (category, price, fitment, photos, policies). An item can only be listed once its check passes.') }}</p>
-                            <p><span class="font-medium text-ink">{{ __('List / Push') }}</span> — {{ __('List publishes this item as a new listing; Push updates the existing listing with the item’s current data. Live channels confirm before writing.') }}</p>
+                            <p>{{ __('Readiness (category, price, fitment, photos, policies) re-checks itself whenever the item changes; an item can only be listed once its check passes.') }}</p>
+                            <p><span class="font-medium text-ink">{{ __('List / Push') }}</span> — {{ __('List publishes this item as a new listing; Push updates the existing listing with the item’s current data. Quantity syncs automatically when stock changes — push is for content. Live channels confirm before writing.') }}</p>
                         </div>
                     </div>
 
@@ -561,13 +544,19 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                 $draft = $row['draft'];
                                 $gapLinks = [
                                     'item_facts' => ['label' => __('Edit details'), 'href' => '#item-facts'],
+                                    'catalog_fit' => ['label' => __('Edit catalog fit'), 'href' => '#catalog-fit'],
                                     'fitment' => ['label' => __('Edit fitment'), 'href' => '#fitment'],
                                     'photos' => ['label' => __('Edit media'), 'href' => '#photos'],
                                     'attributes' => ['label' => __('Edit identifiers'), 'href' => '#attributes'],
                                     'settings' => ['label' => __('Open channel settings'), 'href' => $row['settings_url'] ? $row['settings_url'].'#defaults' : null],
                                     'ebay_categories' => ['label' => __('Map eBay category'), 'href' => $row['settings_url'] ? $row['settings_url'].'#categories' : null],
                                 ];
-                                $firstGaps = collect($row['blockers'])->take(3);
+                                // Setup gaps are fixed on channel settings pages, item gaps on
+                                // this page — grouping them tells the operator which tool to
+                                // reach for without reading every line.
+                                $isSetupGap = fn (array $gap): bool => in_array($gap['action'] ?? null, ['settings', 'ebay_categories'], true);
+                                [$setupBlockers, $itemBlockers] = collect($row['blockers'])->partition($isSetupGap);
+                                [$setupWarnings, $itemWarnings] = collect($row['warnings'])->partition($isSetupGap);
 
                                 // One badge answers "where is this listing?" instead of three
                                 // overlapping ones (Listed + Ready + ACTIVE). A live, active
@@ -585,6 +574,14 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                 }
                             @endphp
 
+                            @php
+                                // The Push/List button explains itself whether enabled or not.
+                                $pushTitle = ! $row['can_push']
+                                    ? $row['push_disabled_reason']
+                                    : ($row['listed']
+                                        ? __('Update the live listing with this item’s current title, price, description, and photos. Quantity stays in sync automatically — push after content edits.')
+                                        : __('Publish this item as a new listing on this channel.'));
+                            @endphp
                             <div wire:key="item-channel-{{ $row['key'] }}" class="rounded-2xl border border-border-default bg-surface-subtle p-3">
                                 <div class="flex items-start justify-between gap-3">
                                     <div class="min-w-0">
@@ -593,26 +590,26 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                             @if ($row['environment'])
                                                 <x-ui.badge :variant="$row['environment'] === 'live' ? 'warning' : 'default'">{{ __(Illuminate\Support\Str::headline($row['environment'])) }}</x-ui.badge>
                                             @endif
-                                            <x-ui.badge :variant="$stateVariant">{{ __($stateLabel) }}</x-ui.badge>
+                                            @if ($row['listed'] && $listing?->listing_url)
+                                                {{-- The state pill doubles as the way to the live listing. --}}
+                                                <a href="{{ $listing->listing_url }}" target="_blank" rel="noreferrer" title="{{ __('Open the live listing') }}">
+                                                    <x-ui.badge :variant="$stateVariant">{{ __($stateLabel) }} ↗</x-ui.badge>
+                                                </a>
+                                            @else
+                                                <x-ui.badge :variant="$stateVariant">{{ __($stateLabel) }}</x-ui.badge>
+                                            @endif
                                         </div>
                                     </div>
 
                                     <div class="flex shrink-0 flex-col items-end gap-2">
-                                        @if ($this->canEdit())
-                                            <x-ui.button type="button" variant="ghost" size="sm" wire:click="refreshChannelReadiness('{{ $row['key'] }}')" wire:loading.attr="disabled" wire:target="refreshChannelReadiness('{{ $row['key'] }}')" title="{{ __('Re-run the readiness check on this channel only') }}">
-                                                <x-icon name="heroicon-o-arrow-path" class="h-4 w-4" />
-                                                {{ __('Recheck') }}
-                                            </x-ui.button>
-                                        @endif
-
                                         @if ($this->canPushToMarketplace())
                                             @if ($row['requires_confirmation'])
-                                                <x-ui.button type="button" :variant="$row['can_push'] ? 'primary' : 'outline'" size="sm" wire:click="pushChannel('{{ $row['key'] }}')" wire:loading.attr="disabled" wire:target="pushChannel('{{ $row['key'] }}')" :disabled="! $row['can_push']" wire:confirm="{{ __('This will write to the live :channel marketplace. Continue?', ['channel' => $row['label']]) }}">
+                                                <x-ui.button type="button" :variant="$row['can_push'] ? 'primary' : 'outline'" size="sm" wire:click="pushChannel('{{ $row['key'] }}')" wire:loading.attr="disabled" wire:target="pushChannel('{{ $row['key'] }}')" :disabled="! $row['can_push']" :title="$pushTitle" wire:confirm="{{ __('This will write to the live :channel marketplace. Continue?', ['channel' => $row['label']]) }}">
                                                     <x-icon name="{{ $row['listed'] ? 'heroicon-o-arrow-up-tray' : 'heroicon-o-plus-circle' }}" class="h-4 w-4" />
                                                     {{ $row['listed'] ? __('Push') : __('List') }}
                                                 </x-ui.button>
                                             @else
-                                                <x-ui.button type="button" :variant="$row['can_push'] ? 'primary' : 'outline'" size="sm" wire:click="pushChannel('{{ $row['key'] }}')" wire:loading.attr="disabled" wire:target="pushChannel('{{ $row['key'] }}')" :disabled="! $row['can_push']">
+                                                <x-ui.button type="button" :variant="$row['can_push'] ? 'primary' : 'outline'" size="sm" wire:click="pushChannel('{{ $row['key'] }}')" wire:loading.attr="disabled" wire:target="pushChannel('{{ $row['key'] }}')" :disabled="! $row['can_push']" :title="$pushTitle">
                                                     <x-icon name="{{ $row['listed'] ? 'heroicon-o-arrow-up-tray' : 'heroicon-o-plus-circle' }}" class="h-4 w-4" />
                                                     {{ $row['listed'] ? __('Push') : __('List') }}
                                                 </x-ui.button>
@@ -623,19 +620,14 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 
                                 <div class="mt-3 border-t border-border-default pt-3 text-xs text-muted">
                                     <div class="flex flex-wrap items-center gap-x-4 gap-y-1">
-                                        @if ($listing?->listing_url)
-                                            <a href="{{ $listing->listing_url }}" target="_blank" rel="noreferrer" class="inline-flex items-center gap-1 font-medium text-accent hover:underline">
-                                                <x-icon name="heroicon-o-arrow-top-right-on-square" class="h-3.5 w-3.5" />
-                                                {{ __('Listing page') }}
-                                            </a>
-                                        @elseif ($listing?->external_listing_id)
+                                        @if (! $row['listed'] && $listing?->external_listing_id)
                                             <span class="font-mono">{{ $listing->external_listing_id }}</span>
                                         @endif
 
                                         @if ($row['index_url'])
                                             <a href="{{ $row['index_url'] }}" class="inline-flex items-center gap-1 font-medium text-accent hover:underline" wire:navigate>
                                                 <x-icon name="heroicon-o-link" class="h-3.5 w-3.5" />
-                                                {{ __('Channel page') }}
+                                                {{ __(':channel Marketplace', ['channel' => $row['label']]) }}
                                             </a>
                                         @endif
                                     </div>
@@ -644,57 +636,54 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                         <p class="mt-1">{{ __('Will use target price: :price', ['price' => $this->formatMoney($row['price_amount'], $row['currency_code'])]) }}</p>
                                     @endunless
 
-                                    @if ($draft)
-                                        <p class="mt-1">{{ __('Checked :time', ['time' => $draft->metadata_checked_at?->diffForHumans() ?? __('never')]) }}</p>
-                                    @else
-                                        <p class="mt-1">{{ __('Run checks before the first push.') }}</p>
-                                    @endif
+                                    @unless ($draft)
+                                        <p class="mt-1">{{ __('Readiness has not been checked yet.') }}</p>
+                                    @endunless
 
                                     @if ($row['blockers'] !== [])
                                         <div class="mt-2">
                                             <p class="font-medium text-status-danger">{{ trans_choice(':count blocker|:count blockers', count($row['blockers']), ['count' => count($row['blockers'])]) }}</p>
-                                            <ul class="mt-1 space-y-1">
-                                                @foreach ($firstGaps as $gap)
-                                                    <li class="flex gap-1.5">
-                                                        <span class="text-status-danger">•</span>
-                                                        <span>
-                                                            {{ $gap['label'] ?? __('Readiness blocker') }}
-                                                            @if (isset($gap['action'], $gapLinks[$gap['action']]) && $gapLinks[$gap['action']]['href'])
-                                                                @if ($gap['action'] === 'settings')
-                                                                    <a href="{{ $gapLinks[$gap['action']]['href'] }}" class="ml-1 font-medium text-accent hover:underline" wire:navigate>{{ $gapLinks[$gap['action']]['label'] }}</a>
-                                                                @else
-                                                                    <a href="{{ $gapLinks[$gap['action']]['href'] }}" class="ml-1 font-medium text-accent hover:underline">{{ $gapLinks[$gap['action']]['label'] }}</a>
-                                                                @endif
-                                                            @endif
-                                                        </span>
-                                                    </li>
-                                                @endforeach
-                                            </ul>
+                                            @foreach ([__('This item') => $itemBlockers, __('Channel setup') => $setupBlockers] as $groupHeading => $groupGaps)
+                                                @if ($groupGaps->isNotEmpty())
+                                                    @if ($itemBlockers->isNotEmpty() && $setupBlockers->isNotEmpty())
+                                                        <p class="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">{{ $groupHeading }}</p>
+                                                    @endif
+                                                    @include('commerce-inventory::livewire.commerce.inventory.items.partials.channel-gap-list', [
+                                                        'gaps' => $groupGaps,
+                                                        'gapLinks' => $gapLinks,
+                                                        'bulletClass' => 'text-status-danger',
+                                                    ])
+                                                @endif
+                                            @endforeach
                                         </div>
                                     @elseif ($row['readiness_status'] === 'ready')
                                         <p class="mt-2">{{ __('Ready to publish or revise.') }}</p>
                                     @endif
 
+                                    {{-- Warnings never gate the push, so they stay behind a
+                                         disclosure while blockers need attention and only open
+                                         by default once the blockers are cleared. --}}
                                     @if ($row['warnings'] !== [])
                                         <div class="mt-2">
-                                            <p class="font-medium text-status-warning">{{ trans_choice(':count warning|:count warnings', count($row['warnings']), ['count' => count($row['warnings'])]) }}</p>
-                                            <ul class="mt-1 space-y-1">
-                                                @foreach ($row['warnings'] as $warning)
-                                                    <li class="flex gap-1.5">
-                                                        <span class="text-status-warning">•</span>
-                                                        <span>
-                                                            {{ $warning['label'] ?? __('Listing warning') }}
-                                                            @if (isset($warning['action'], $gapLinks[$warning['action']]) && $gapLinks[$warning['action']]['href'])
-                                                                @if ($warning['action'] === 'settings')
-                                                                    <a href="{{ $gapLinks[$warning['action']]['href'] }}" class="ml-1 font-medium text-accent hover:underline" wire:navigate>{{ $gapLinks[$warning['action']]['label'] }}</a>
-                                                                @else
-                                                                    <a href="{{ $gapLinks[$warning['action']]['href'] }}" class="ml-1 font-medium text-accent hover:underline">{{ $gapLinks[$warning['action']]['label'] }}</a>
-                                                                @endif
-                                                            @endif
-                                                        </span>
-                                                    </li>
+                                            <x-ui.disclosure
+                                                :title="trans_choice(':count warning|:count warnings', count($row['warnings']), ['count' => count($row['warnings'])])"
+                                                :default-open="$row['blockers'] === []"
+                                                title-class="text-xs font-medium text-status-warning"
+                                                content-class="mt-1"
+                                            >
+                                                @foreach ([__('This item') => $itemWarnings, __('Channel setup') => $setupWarnings] as $groupHeading => $groupGaps)
+                                                    @if ($groupGaps->isNotEmpty())
+                                                        @if ($itemWarnings->isNotEmpty() && $setupWarnings->isNotEmpty())
+                                                            <p class="mt-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">{{ $groupHeading }}</p>
+                                                        @endif
+                                                        @include('commerce-inventory::livewire.commerce.inventory.items.partials.channel-gap-list', [
+                                                            'gaps' => $groupGaps,
+                                                            'gapLinks' => $gapLinks,
+                                                            'bulletClass' => 'text-status-warning',
+                                                        ])
+                                                    @endif
                                                 @endforeach
-                                            </ul>
+                                            </x-ui.disclosure>
                                         </div>
                                     @endif
                                 </div>
@@ -768,9 +757,9 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                     </x-ui.card>
                 @endforeach
 
-                <x-ui.card id="photos">
+                <x-ui.card id="photos" class="scroll-mt-24 target:ring-2 target:ring-accent/60">
                     <div
-                        x-data="{ dragging: false, dragDepth: 0, autoUploadOnFinish: false }"
+                        x-data="{ dragging: false, dragDepth: 0, autoUploadOnFinish: false, uploadError: false }"
                         class="relative"
                         @dragenter.prevent.stop="
                             dragDepth++;
@@ -786,7 +775,11 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                             autoUploadOnFinish = false;
                             $wire.uploadPhotos();
                         "
-                        x-on:livewire-upload-error.window="autoUploadOnFinish = false"
+                        {{-- A failed temp upload (e.g. a photo over the server's PHP
+                             upload limit) never reaches Laravel validation, so it must
+                             be surfaced here or the photo silently never appears. --}}
+                        x-on:livewire-upload-error.window="autoUploadOnFinish = false; uploadError = true"
+                        x-on:livewire-upload-start.window="uploadError = false"
                         @drop.prevent.stop="
                             dragDepth = 0;
                             dragging = false;
@@ -869,6 +862,10 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                     class="mt-1 block w-full text-sm text-ink file:mr-4 file:rounded file:border-0 file:bg-surface-subtle file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-ink hover:file:bg-surface-subtle/80"
                                 />
 
+                                <p x-cloak x-show="uploadError" class="mt-1 text-sm text-status-danger">
+                                    {{ __('Upload failed — each photo must be an image no larger than 10 MB. Try a smaller photo.') }}
+                                </p>
+
                                 @error('photoFiles') <p class="mt-1 text-sm text-status-danger">{{ $message }}</p> @enderror
                                 @error('photoFiles.*') <p class="mt-1 text-sm text-status-danger">{{ $message }}</p> @enderror
                                 @if (! $errors->has('photoFiles') && ! $errors->has('photoFiles.*'))
@@ -881,11 +878,11 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                     </div>
                 </x-ui.card>
 
-                <x-ui.card id="attributes">
+                <x-ui.card id="attributes" class="scroll-mt-24 target:ring-2 target:ring-accent/60">
                     <div class="mb-3 flex items-center justify-between gap-3">
                         <div>
-                            <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Identifiers & Attributes') }}</h2>
-                            <p class="mt-1 text-sm text-muted">{{ __('Structured facts that power search, fitment evidence, and channel-specific item specifics.') }}</p>
+                            <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Attributes') }}</h2>
+                            <p class="mt-1 text-sm text-muted">{{ __('Structured facts — part numbers, condition, brand — that power search and become marketplace item specifics.') }}</p>
                         </div>
                         <x-ui.badge>{{ $item->catalogAttributeValues->count() }}</x-ui.badge>
                     </div>
@@ -919,11 +916,12 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 
                     @if ($this->canEdit())
                         <form wire:submit="saveAttributeValue" class="mt-4 space-y-4 border-t border-border-default pt-4">
+                            {{-- .live: the value field only renders once an attribute is
+                                 chosen, so the choice must sync immediately. --}}
                             <x-ui.select
                                 id="item-attribute-id"
-                                wire:model="selectedAttributeId"
+                                wire:model.live="selectedAttributeId"
                                 label="{{ __('Attribute') }}"
-                                :help="__('Structured buyer-facing fact such as OEM number, interchange number, or condition grade.')"
                                 :error="$errors->first('selectedAttributeId')"
                             >
                                 <option value="">{{ __('Select...') }}</option>
@@ -944,7 +942,6 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                     id="item-attribute-value"
                                     wire:model="attributeValue"
                                     label="{{ __('Value') }}"
-                                    :help="__('The value for the selected attribute. These values map to marketplace item specifics later.')"
                                     :error="$errors->first('attributeValue')"
                                 />
 

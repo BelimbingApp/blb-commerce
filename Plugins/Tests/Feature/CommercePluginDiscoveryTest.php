@@ -110,7 +110,9 @@ test('commerce plugin discovery leaves generic commerce usable without nested ex
 
     $discovery->discoverInto($registry);
 
-    expect($registry->workbenchPanels())->toHaveKey('commerce.inventory.item-basics')
+    // Core ships no workbench panels of its own — readiness lives on the
+    // channel rows of the item page; panels are an extension surface.
+    expect($registry->workbenchPanels())->toBe([])
         ->and($registry->catalogPresets())->not->toHaveKey('ham.auto-parts.catalog')
         ->and($registry->marketplaceTemplateMappings())->not->toHaveKey('ham.auto-parts.ebay-motors.lighting_headlights')
         ->and($registry->insightPages())->not->toHaveKey('ham.auto-parts.insights.sold-this-month');

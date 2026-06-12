@@ -3,6 +3,7 @@
 use App\Base\Integration\Services\OAuthTokenStore;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
+use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayMetadataService;
 use App\Modules\Commerce\Marketplace\Models\MarketplaceMetadata;
@@ -34,8 +35,38 @@ function configureEbayMetadataRefreshCommandEnvironment(int $companyId): void
     );
 }
 
-test('eBay metadata refresh command requires a category tree id', function (): void {
-    $this->artisan('commerce:marketplace:ebay:metadata-refresh')
+test('eBay metadata refresh command with no options discovers and refreshes mapped categories', function (): void {
+    $user = createAdminUser();
+    configureEbayMetadataRefreshCommandEnvironment($user->company_id);
+
+    ProductTemplate::factory()->create([
+        'company_id' => $user->company_id,
+        'metadata' => [
+            'marketplace' => [
+                'ebay' => [
+                    'marketplace_id' => 'EBAY_MOTORS_US',
+                    'category_tree_id' => '100',
+                    'category_id' => EBAY_METADATA_REFRESH_CATEGORY_ID,
+                ],
+            ],
+        ],
+    ]);
+
+    Http::fake(['https://api.sandbox.ebay.com/*' => Http::response([])]);
+
+    // This no-options form is what the nightly schedule runs.
+    $this->artisan('commerce:marketplace:ebay:metadata-refresh', ['--company-id' => $user->company_id])
+        ->assertSuccessful()
+        ->expectsOutputToContain('refreshing 1 mapped categories');
+
+    expect(MarketplaceMetadata::query()
+        ->where('kind', EbayMetadataService::KIND_CATEGORY_ASPECTS)
+        ->where('key', EBAY_METADATA_REFRESH_CATEGORY_KEY)
+        ->exists())->toBeTrue();
+});
+
+test('eBay metadata refresh command still requires a tree id when categories are passed explicitly', function (): void {
+    $this->artisan('commerce:marketplace:ebay:metadata-refresh', ['--category-id' => ['33563']])
         ->assertFailed()
         ->expectsOutputToContain('Pass --category-tree-id');
 });

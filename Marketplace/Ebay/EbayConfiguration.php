@@ -18,6 +18,34 @@ class EbayConfiguration
         'https://api.ebay.com/oauth/api_scope',
     ];
 
+    /**
+     * Marketplaces offered in mapping UIs, keyed by eBay marketplace id. The
+     * id doubles as the taxonomy marketplace (EBAY_MOTORS_US carries the
+     * Motors category tree even though offers publish on EBAY_MOTORS).
+     */
+    public const MARKETPLACES = [
+        'EBAY_US' => 'eBay US',
+        'EBAY_MOTORS_US' => 'eBay Motors US',
+        'EBAY_CA' => 'eBay Canada',
+        'EBAY_GB' => 'eBay UK',
+        'EBAY_AU' => 'eBay Australia',
+        'EBAY_DE' => 'eBay Germany',
+    ];
+
+    /**
+     * Offers for these taxonomy marketplaces must publish on a different
+     * marketplace id, or eBay rejects the category at publish time: Motors
+     * metadata lives on EBAY_MOTORS_US but offers go to EBAY_MOTORS.
+     */
+    private const LISTING_MARKETPLACE_OVERRIDES = [
+        'EBAY_MOTORS_US' => 'EBAY_MOTORS',
+    ];
+
+    public static function listingMarketplaceFor(string $marketplaceId): string
+    {
+        return self::LISTING_MARKETPLACE_OVERRIDES[$marketplaceId] ?? $marketplaceId;
+    }
+
     public function __construct(
         private readonly SettingsService $settings,
     ) {}

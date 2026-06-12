@@ -57,6 +57,34 @@ class Show extends Component
         $this->catalogCategoryId = $this->item->category_id;
         $this->catalogProductTemplateId = $this->item->product_template_id;
         $this->currencyCode = (string) $this->item->currency_code;
+
+        $this->refreshAllChannelReadiness();
+    }
+
+    /**
+     * Recompute every channel's readiness draft so the Channels panel never
+     * shows a stale verdict: on page load and again after each edit that can
+     * change readiness. refreshListingDraft is local-only by contract (see
+     * MarketplaceChannel), so this is cheap. There is no manual recheck — a
+     * channel that fails keeps its last snapshot and the failure is flashed.
+     */
+    private function refreshAllChannelReadiness(): void
+    {
+        $registry = app(MarketplaceChannelRegistry::class);
+        $item = $this->item->fresh() ?? $this->item;
+        $failures = [];
+
+        foreach ($registry->all() as $channel => $descriptor) {
+            try {
+                $registry->channel($channel)->refreshListingDraft($item);
+            } catch (Throwable $exception) {
+                $failures[] = $descriptor->label.': '.$exception->getMessage();
+            }
+        }
+
+        if ($failures !== []) {
+            session()->flash('warning', __('Channel readiness could not be refreshed. :failures', ['failures' => implode(' ', array_slice($failures, 0, 2))]));
+        }
     }
 
     /**
@@ -79,24 +107,6 @@ class Show extends Component
         $this->item->update(['currency_code' => $validated['currency_code']]);
         $this->item->refresh();
         $this->currencyCode = (string) $this->item->currency_code;
-    }
-
-    public function refreshChannelReadiness(string $channel, MarketplaceChannelRegistry $channels): void
-    {
-        $this->authorizeUpdate();
-
-        $descriptor = $channels->descriptor($channel);
-
-        try {
-            $channels->channel($channel)->refreshListingDraft($this->item->fresh() ?? $this->item);
-        } catch (Throwable $exception) {
-            session()->flash('error', $exception->getMessage());
-
-            return;
-        }
-
-        $this->item->refresh();
-        session()->flash('success', __(':channel readiness refreshed.', ['channel' => $descriptor->label]));
     }
 
     public function pushChannel(string $channel, MarketplaceListingPushService $pushes): void
@@ -156,6 +166,10 @@ class Show extends Component
         );
 
         $this->item->refresh();
+
+        if (in_array($field, ['sku', 'title', 'description', 'quantity_on_hand'], true)) {
+            $this->refreshAllChannelReadiness();
+        }
 
         // Inventory is the source of truth for availability: a quantity change
         // (including a sale that drops it to 0) propagates to every channel
@@ -233,6 +247,7 @@ class Show extends Component
 
         $this->photoFiles = [];
         $this->item->load('photos');
+        $this->refreshAllChannelReadiness();
     }
 
     public function deletePhoto(int $photoId, InventoryItemService $items): void
@@ -247,6 +262,7 @@ class Show extends Component
         $items->deletePhoto($photo);
 
         $this->item->load('photos');
+        $this->refreshAllChannelReadiness();
     }
 
     public function saveMoneyField(string $field, mixed $value): void
@@ -266,6 +282,10 @@ class Show extends Component
             $field => Money::fromDecimalString($validated[$field] ?? null, $this->item->currency_code)?->minorAmount,
         ]);
         $this->item->refresh();
+
+        if ($field === 'target_price_amount') {
+            $this->refreshAllChannelReadiness();
+        }
     }
 
     /**
@@ -403,7 +423,7 @@ class Show extends Component
                 ->orderBy('sku')
                 ->limit(100)
                 ->get(),
-            'canBootstrapFitmentFromAttributes' => $this->fitmentAttributeCodes() !== [],
+            'canBootstrapFitmentFromAttributes' => $this->canBootstrapFitmentFromAttributes(),
             'channelRows' => $this->channelRows(app(MarketplaceChannelRegistry::class)),
             'extensionReadinessPanels' => app(CommercePluginRegistry::class)->itemReadinessPanels($this->item),
         ]);
@@ -442,6 +462,7 @@ class Show extends Component
      *     listed: bool,
      *     can_push: bool,
      *     supports_push: bool,
+     *     push_disabled_reason: string|null,
      *     readiness_status: string,
      *     readiness_variant: string,
      *     blockers: list<array<string, mixed>>,
@@ -498,6 +519,13 @@ class Show extends Component
                     ->values()
                     ->all();
                 $environment = data_get($draft?->readiness_snapshot, 'facts.environment');
+                $canPush = $supportsPush && $readinessStatus === 'ready';
+                $pushDisabledReason = match (true) {
+                    $canPush => null,
+                    ! $supportsPush => __('This channel does not support publishing from Belimbing yet.'),
+                    $readinessStatus === 'blocked' => trans_choice('Resolve the blocker below first.|Resolve the :count blockers below first.', count($blockers), ['count' => count($blockers)]),
+                    default => __('Run a readiness check first.'),
+                };
 
                 return [
                     'key' => $channel,
@@ -506,8 +534,9 @@ class Show extends Component
                     'listing' => $listing instanceof Listing ? $listing : null,
                     'draft' => $draft instanceof ListingDraft ? $draft : null,
                     'listed' => $listed,
-                    'can_push' => $supportsPush && $readinessStatus === 'ready',
+                    'can_push' => $canPush,
                     'supports_push' => $supportsPush,
+                    'push_disabled_reason' => $pushDisabledReason,
                     'readiness_status' => $readinessStatus,
                     'readiness_variant' => $this->readinessVariant($readinessStatus),
                     'blockers' => $blockers,

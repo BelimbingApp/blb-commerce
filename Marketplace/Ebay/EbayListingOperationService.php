@@ -25,6 +25,7 @@ class EbayListingOperationService
         private readonly EbayListingReadinessService $readiness,
         private readonly EbayListingPayloadBuilder $payloads,
         private readonly EbayProductReferenceImporter $productReferences,
+        private readonly EbayPictureService $pictures,
     ) {}
 
     /**
@@ -32,6 +33,11 @@ class EbayListingOperationService
      */
     public function createListing(Item $item): array
     {
+        // eBay fetches listing photos from public HTTPS URLs, so hosting the
+        // local photo files on EPS is part of publishing, before the draft is
+        // refreshed and the payload built from the stored URLs.
+        $this->pictures->ensureHostedPhotos($item);
+
         $draft = $this->readyDraft($item, 'publish');
         $existingListing = $draft->listing ?? $item->marketplaceListings()
             ->where('channel', EbayConfiguration::CHANNEL)
@@ -63,6 +69,8 @@ class EbayListingOperationService
                 'Missing eBay offer id.',
             );
         }
+
+        $this->pictures->ensureHostedPhotos($listing->item);
 
         $draft = $this->readyDraft($listing->item, 'revise');
         $payload = $this->payloads->build($draft);
@@ -213,6 +221,14 @@ class EbayListingOperationService
             );
 
             $offerId = $existingListing?->external_offer_id;
+            if ($offerId === null || trim($offerId) === '') {
+                // A previous publish may have created the offer and then failed
+                // before the id was stored. Creating again errors "Offer entity
+                // already exists", so look the offer up by SKU first and update
+                // it — publish retries must be idempotent.
+                $offerId = $this->findOfferIdBySku($draft->company_id, $config, $accessToken, $payload);
+            }
+
             if ($offerId !== null && trim($offerId) !== '') {
                 $operationLog[] = $this->updateOffer($draft->company_id, $config, $accessToken, $payload, $offerId);
             } else {
@@ -335,6 +351,36 @@ class EbayListingOperationService
         );
 
         return $this->operationResult('compatibility_upsert', $response);
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @param  array<string, mixed>  $payload
+     */
+    private function findOfferIdBySku(int $companyId, array $config, string $accessToken, array $payload): ?string
+    {
+        $sku = (string) ($payload['sku'] ?? '');
+        $marketplaceId = (string) data_get($payload, 'offer.marketplaceId', '');
+
+        if ($sku === '' || $marketplaceId === '') {
+            return null;
+        }
+
+        $response = $this->request(
+            companyId: $companyId,
+            config: $config,
+            accessToken: $accessToken,
+            request: [
+                'operation' => 'listing.offer.lookup',
+                'method' => 'GET',
+                'path' => '/sell/inventory/v1/offer?sku='.rawurlencode($sku).'&marketplace_id='.rawurlencode($marketplaceId),
+            ],
+            tolerateStatuses: [404],
+        );
+
+        $offerId = trim((string) $response->json('offers.0.offerId', ''));
+
+        return $offerId !== '' ? $offerId : null;
     }
 
     /**
@@ -482,10 +528,30 @@ class EbayListingOperationService
                 $operation,
                 $response->status,
                 $response->exchange?->id,
+                $this->responseErrorDetail($response),
             );
         }
 
         return $response;
+    }
+
+    /**
+     * eBay's own error sentences ("A description is required...") so the
+     * operator sees what to fix instead of only an exchange id.
+     */
+    private function responseErrorDetail(IntegrationResponse $response): ?string
+    {
+        $decoded = json_decode($response->body, true);
+
+        $messages = collect(is_array($decoded) ? data_get($decoded, 'errors', []) : [])
+            ->map(fn (mixed $error): string => is_array($error)
+                ? trim((string) ($error['longMessage'] ?? $error['message'] ?? ''))
+                : '')
+            ->filter()
+            ->unique()
+            ->take(3);
+
+        return $messages->isNotEmpty() ? $messages->implode(' ') : null;
     }
 
     /**

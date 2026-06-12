@@ -5,7 +5,6 @@ namespace App\Modules\Commerce\Marketplace\Ebay;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Marketplace\Models\AccountResource;
 use App\Modules\Commerce\Marketplace\Models\MarketplaceMetadata;
-use Illuminate\Support\Collection;
 
 class EbayReadinessGapAnalyzer
 {
@@ -49,7 +48,7 @@ class EbayReadinessGapAnalyzer
         $blockers = [];
         $warnings = [];
 
-        $this->addItemReadinessGaps($item, $context['category_id'], $blockers, $warnings);
+        $this->addItemReadinessGaps($item, $context['category_id'], (bool) ($context['has_live_description'] ?? false), $blockers, $warnings);
         $this->addPolicyReadinessGaps(
             $item,
             $context['policy_ids'],
@@ -69,10 +68,16 @@ class EbayReadinessGapAnalyzer
      * @param  list<array{key: string, label: string}>  $blockers
      * @param  list<array{key: string, label: string}>  $warnings
      */
-    private function addItemReadinessGaps(Item $item, ?string $categoryId, array &$blockers, array &$warnings): void
+    private function addItemReadinessGaps(Item $item, ?string $categoryId, bool $hasLiveDescription, array &$blockers, array &$warnings): void
     {
+        // Two different fixes hide behind a missing eBay category: assign a
+        // template here on the item, or map that template once in eBay
+        // settings. Name the right one, or the operator is sent to a settings
+        // page that cannot help.
         if ($categoryId === null) {
-            $blockers[] = $this->gap('category', __('Map this item’s template to an eBay category on the Categories tab.'), 'ebay_categories');
+            $blockers[] = $item->productTemplate === null
+                ? $this->gap('category', __('Assign a template in Catalog Fit — the eBay category comes from the template’s mapping.'), 'catalog_fit')
+                : $this->gap('category', __('Map the “:template” template to an eBay category on the Categories tab (one-time, then every :template inherits it).', ['template' => $item->productTemplate->name]), 'ebay_categories');
         }
 
         if ($item->target_price_amount === null || $item->target_price_amount <= 0) {
@@ -87,14 +92,22 @@ class EbayReadinessGapAnalyzer
             $blockers[] = $this->gap('fitment', __('Add fitment entries or explicitly mark universal fit.'), 'fitment');
         }
 
+        // Local photos are enough: the push pipeline hosts them on eBay
+        // Picture Services itself (EbayPictureService), so hosting is not a
+        // readiness gate.
         if ($item->photos->isEmpty()) {
             $blockers[] = $this->gap('photos', __('Add at least one photo.'), 'photos');
-        } elseif (! $this->hasPublishSafePhotos($item)) {
-            $blockers[] = $this->gap('publish_safe_photos', __('Use public HTTPS photo URLs before publishing to eBay.'), 'photos');
         }
 
+        // eBay rejects a publish without a description (error 25016). With a
+        // live listing body to fall back on, a revise still works — then the
+        // empty item description is only a warning.
         if (blank($item->description)) {
-            $warnings[] = $this->gap('description', __('Add a listing description before publishing.'), 'item_facts');
+            if ($hasLiveDescription) {
+                $warnings[] = $this->gap('description', __('No description in Belimbing yet — pushes keep the current live listing text. Add one here to take ownership.'), 'item_facts');
+            } else {
+                $blockers[] = $this->gap('description', __('Add a listing description — eBay requires one to publish.'), 'item_facts');
+            }
         }
 
         if ($item->photos->count() > 0 && $item->photos->count() < 3) {
@@ -253,19 +266,6 @@ class EbayReadinessGapAnalyzer
     private function hasIdentifierConflict(array $identifierAlignment): bool
     {
         return collect($identifierAlignment)->contains(fn (array $alignment): bool => $alignment['status'] === 'conflict');
-    }
-
-    private function hasPublishSafePhotos(Item $item): bool
-    {
-        return $this->publicPhotoUrls($item)->isNotEmpty();
-    }
-
-    private function publicPhotoUrls(Item $item): Collection
-    {
-        return $item->photos
-            ->map(fn ($photo): mixed => $photo->mediaAsset?->metadata['public_url'] ?? null)
-            ->filter(fn (mixed $url): bool => is_string($url) && str_starts_with($url, 'https://'))
-            ->values();
     }
 
     /**

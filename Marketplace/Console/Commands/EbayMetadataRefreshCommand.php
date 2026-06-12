@@ -2,9 +2,11 @@
 
 namespace App\Modules\Commerce\Marketplace\Console\Commands;
 
+use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayMetadataService;
 use App\Modules\Commerce\Marketplace\Models\MarketplaceMetadata;
+use App\Modules\Commerce\Plugins\Services\CommercePluginRegistry;
 use App\Modules\Core\Company\Models\Company;
 use Illuminate\Console\Command;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -24,6 +26,13 @@ class EbayMetadataRefreshCommand extends Command
 
     public function handle(EbayConfiguration $configuration, EbayMetadataService $metadata): int
     {
+        // With no explicit tree/categories the command discovers every mapped
+        // category itself — that is what the nightly schedule runs, so cached
+        // eBay rules stay current without anyone pressing a refresh button.
+        if ($this->categoryTreeId() === null && $this->categoryIds() === []) {
+            return $this->refreshDiscoveredMappings($metadata);
+        }
+
         if ($this->categoryTreeId() === null) {
             $this->components->error('Pass --category-tree-id, for example --category-tree-id=100 for US eBay Motors.');
 
@@ -53,6 +62,67 @@ class EbayMetadataRefreshCommand extends Command
         }
 
         return $exitCode;
+    }
+
+    private function refreshDiscoveredMappings(EbayMetadataService $metadata): int
+    {
+        $exitCode = self::SUCCESS;
+        $force = (bool) $this->option('force');
+
+        foreach ($this->companyIds() as $companyId) {
+            $mappings = $this->mappedCategories($companyId);
+
+            if ($mappings === []) {
+                continue;
+            }
+
+            $this->components->info("Company {$companyId}: refreshing ".count($mappings).' mapped categories.');
+
+            foreach ($mappings as $mapping) {
+                try {
+                    $metadata->categoryTree($companyId, $mapping['marketplace_id'], $mapping['category_tree_id'], $force);
+                    $this->refreshCategory($metadata, $companyId, $mapping['marketplace_id'], $mapping['category_tree_id'], $mapping['category_id'], $force);
+                } catch (Throwable $exception) {
+                    $exitCode = self::FAILURE;
+                    $this->components->error("Company {$companyId} category {$mapping['category_id']}: {$exception->getMessage()}");
+                }
+            }
+        }
+
+        return $exitCode;
+    }
+
+    /**
+     * Every distinct (marketplace, tree, category) a company's templates map
+     * to — template metadata first, plugin defaults as fallback, the same
+     * precedence the readiness service uses.
+     *
+     * @return list<array{marketplace_id: string, category_tree_id: string, category_id: string}>
+     */
+    private function mappedCategories(int $companyId): array
+    {
+        $plugins = app(CommercePluginRegistry::class);
+
+        return ProductTemplate::query()
+            ->where('company_id', $companyId)
+            ->get()
+            ->map(function (ProductTemplate $template) use ($plugins): ?array {
+                $own = data_get($template->metadata, 'marketplace.ebay', []);
+                $plugin = $plugins->marketplaceTemplateMappingForTemplate(EbayConfiguration::CHANNEL, $template);
+
+                $marketplaceId = $own['marketplace_id'] ?? $plugin['marketplace_id'] ?? null;
+                $categoryTreeId = $own['category_tree_id'] ?? $plugin['category_tree_id'] ?? null;
+                $categoryId = $own['category_id'] ?? $plugin['category_id'] ?? null;
+
+                return is_string($marketplaceId) && is_string($categoryTreeId) && is_string($categoryId)
+                    && $marketplaceId !== '' && $categoryTreeId !== '' && $categoryId !== ''
+                    ? ['marketplace_id' => $marketplaceId, 'category_tree_id' => $categoryTreeId, 'category_id' => $categoryId]
+                    : null;
+            })
+            ->filter()
+            ->unique(fn (array $mapping): string => implode(':', $mapping))
+            ->values()
+            ->all();
     }
 
     private function refreshCategory(

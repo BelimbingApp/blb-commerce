@@ -47,11 +47,13 @@ test('eBay listing readiness records blockers on the durable draft', function ()
             'merchant_location',
         );
 
+    // No template assigned: the category blocker must point at Catalog Fit on
+    // this page, not at the eBay settings page (mapping is per template).
     Livewire::test(Show::class, ['item' => $item->fresh()])
-        ->assertSee('Listing &amp; Channels', false)
+        ->assertSee('Channels')
         ->assertSee('eBay')
         ->assertSee('Blocked')
-        ->assertSee('eBay category on the Categories tab');
+        ->assertSee('Assign a template in Catalog Fit');
 });
 
 test('eBay listing readiness uses plugin template mapping defaults', function (): void {

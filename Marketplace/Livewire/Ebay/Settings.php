@@ -81,9 +81,24 @@ class Settings extends SettingsForm
     public array $newLocationStateOptions = [];
 
     /**
-     * @var array<int, array{marketplace_id: string|null, category_tree_id: string|null, category_id: string|null}>
+     * @var array<int, array{marketplace_id: string|null, category_tree_id: string|null, category_id: string|null, category_label: string|null}>
      */
     public array $templateCategoryMappings = [];
+
+    /**
+     * Category picker modal state. Operators pick eBay categories by name in
+     * one modal per template; the numeric ids are an implementation detail.
+     */
+    public ?int $categoryPickerTemplateId = null;
+
+    public bool $categoryPickerOpen = false;
+
+    public string $categorySearch = '';
+
+    /**
+     * @var list<array{category_id: string, category_tree_id: string, name: string, path: string}>
+     */
+    public array $categorySuggestions = [];
 
     public function mount(SettingsService $settings): void
     {
@@ -292,78 +307,197 @@ class Settings extends SettingsForm
         }
     }
 
-    public function saveTemplateCategoryMappings(): void
+    public function openCategoryPicker(int $templateId): void
     {
         app(AuthorizationService::class)->authorize(
             Actor::forUser(Auth::user()),
             'commerce.marketplace.manage',
         );
 
-        $templates = ProductTemplate::query()
-            ->where('company_id', $this->companyId())
-            ->whereIn('id', array_keys($this->templateCategoryMappings))
-            ->get();
-
-        foreach ($templates as $template) {
-            $mapping = $this->templateCategoryMappings[$template->id] ?? [];
-            $metadata = $template->metadata ?? [];
-            data_set($metadata, 'marketplace.ebay.marketplace_id', $this->nullableDefault($mapping['marketplace_id'] ?? null));
-            data_set($metadata, 'marketplace.ebay.category_tree_id', $this->nullableDefault($mapping['category_tree_id'] ?? null));
-            data_set($metadata, 'marketplace.ebay.category_id', $this->nullableDefault($mapping['category_id'] ?? null));
-
-            $template->metadata = $metadata;
-            $template->save();
-        }
-
-        $this->loadTemplateCategoryMappings();
-        session()->flash('success', __('eBay category mappings saved.'));
+        $this->categoryPickerTemplateId = $templateId;
+        $this->categoryPickerOpen = true;
+        $this->categorySearch = '';
+        $this->categorySuggestions = [];
+        $this->resetErrorBag();
     }
 
-    public function refreshMappedCategoryMetadata(EbayMetadataService $metadata): void
+    public function searchEbayCategories(EbayMetadataService $metadata): void
     {
         app(AuthorizationService::class)->authorize(
             Actor::forUser(Auth::user()),
             'commerce.marketplace.manage',
         );
 
-        $templates = $this->productTemplates()->keyBy('id');
+        $this->resetErrorBag('categorySearch');
+        $this->categorySuggestions = [];
 
-        $mappings = collect($this->templateCategoryMappings)
-            ->map(fn (array $mapping, int $templateId): array => [
-                'marketplace_id' => $this->nullableDefault($mapping['marketplace_id'] ?? null) ?: $this->defaultMarketplaceId($templates->get($templateId)),
-                'category_tree_id' => $this->nullableDefault($mapping['category_tree_id'] ?? null) ?: $this->defaultCategoryTreeId($templates->get($templateId)),
-                'category_id' => $this->nullableDefault($mapping['category_id'] ?? null),
-            ])
-            ->filter(fn (array $mapping): bool => $mapping['category_id'] !== null && $mapping['marketplace_id'] !== null && $mapping['category_tree_id'] !== null)
-            ->unique(fn (array $mapping): string => implode(':', $mapping))
-            ->values();
+        $templateId = $this->categoryPickerTemplateId;
+        $query = trim($this->categorySearch);
 
-        if ($mappings->isEmpty()) {
-            session()->flash('error', __('Add at least one eBay category ID before refreshing metadata.'));
+        if ($templateId === null) {
+            return;
+        }
+
+        if (mb_strlen($query) < 2) {
+            $this->addError('categorySearch', __('Type the part type to search, e.g. “alternator”.'));
 
             return;
         }
 
+        $marketplaceId = $this->nullableDefault($this->templateCategoryMappings[$templateId]['marketplace_id'] ?? null)
+            ?? EbayConfiguration::DEFAULT_LISTING_MARKETPLACE_ID;
+
         try {
-            $companyId = $this->companyId();
-
-            foreach ($mappings as $mapping) {
-                $categoryId = (string) $mapping['category_id'];
-                $marketplaceId = (string) $mapping['marketplace_id'];
-                $categoryTreeId = (string) $mapping['category_tree_id'];
-
-                $metadata->categoryTree($companyId, $marketplaceId, $categoryTreeId, forceRefresh: true);
-                $metadata->categorySubtree($companyId, $marketplaceId, $categoryTreeId, $categoryId, forceRefresh: true);
-                $metadata->categoryAspects($companyId, $marketplaceId, $categoryTreeId, $categoryId, forceRefresh: true);
-                $metadata->compatibilityProperties($companyId, $marketplaceId, $categoryTreeId, $categoryId, forceRefresh: true);
-                $metadata->automotivePartsCompatibilityPolicies($companyId, $marketplaceId, [$categoryId], forceRefresh: true);
-                $metadata->itemConditionPolicies($companyId, $marketplaceId, [$categoryId], forceRefresh: true);
-            }
-
-            session()->flash('success', trans_choice('Refreshed eBay metadata for :count mapped category.|Refreshed eBay metadata for :count mapped categories.', $mappings->count(), ['count' => $mappings->count()]));
+            $suggestions = $metadata->categorySuggestions($this->companyId(), $marketplaceId, $query);
         } catch (Throwable $exception) {
-            session()->flash('error', $exception->getMessage());
+            $this->addError('categorySearch', $exception->getMessage());
+
+            return;
         }
+
+        if ($suggestions === []) {
+            $this->addError('categorySearch', __('eBay returned no categories for “:query”. Try a different part name.', ['query' => $query]));
+
+            return;
+        }
+
+        $this->categorySuggestions = $suggestions;
+    }
+
+    public function applyEbayCategorySuggestion(int $index): void
+    {
+        $templateId = $this->categoryPickerTemplateId;
+        $suggestion = $this->categorySuggestions[$index] ?? null;
+
+        if ($templateId === null || $suggestion === null) {
+            return;
+        }
+
+        $this->templateCategoryMappings[$templateId]['category_id'] = $suggestion['category_id'];
+        $this->templateCategoryMappings[$templateId]['category_tree_id'] = $suggestion['category_tree_id'];
+        $this->templateCategoryMappings[$templateId]['category_label'] = $suggestion['path'];
+
+        $this->persistTemplateMapping($templateId);
+        $this->closeCategoryPicker();
+    }
+
+    public function saveManualCategory(): void
+    {
+        $templateId = $this->categoryPickerTemplateId;
+
+        if ($templateId === null) {
+            return;
+        }
+
+        $categoryId = $this->nullableDefault($this->templateCategoryMappings[$templateId]['category_id'] ?? null);
+
+        if ($categoryId === null || ! ctype_digit($categoryId)) {
+            $this->addError('templateCategoryMappings.'.$templateId.'.category_id', __('Enter the numeric eBay category id.'));
+
+            return;
+        }
+
+        // A hand-entered id replaces whatever suggestion data was there.
+        $this->templateCategoryMappings[$templateId]['category_tree_id'] = null;
+        $this->templateCategoryMappings[$templateId]['category_label'] = null;
+
+        $this->persistTemplateMapping($templateId);
+        $this->closeCategoryPicker();
+    }
+
+    public function removeCategoryMapping(): void
+    {
+        $templateId = $this->categoryPickerTemplateId;
+
+        if ($templateId === null) {
+            return;
+        }
+
+        $this->templateCategoryMappings[$templateId]['category_id'] = null;
+        $this->templateCategoryMappings[$templateId]['category_tree_id'] = null;
+        $this->templateCategoryMappings[$templateId]['category_label'] = null;
+
+        $this->persistTemplateMapping($templateId);
+        $this->closeCategoryPicker();
+    }
+
+    public function closeCategoryPicker(): void
+    {
+        $this->categoryPickerOpen = false;
+        $this->categorySearch = '';
+        $this->categorySuggestions = [];
+    }
+
+    /**
+     * Mappings save the moment they change — the marketplace select and the
+     * category picker are the only writers, so there is no Save button.
+     */
+    public function updatedTemplateCategoryMappings(mixed $value, string $key): void
+    {
+        if (str_ends_with($key, '.marketplace_id')) {
+            $this->persistTemplateMapping((int) strtok($key, '.'));
+        }
+    }
+
+    private function persistTemplateMapping(int $templateId): void
+    {
+        app(AuthorizationService::class)->authorize(
+            Actor::forUser(Auth::user()),
+            'commerce.marketplace.manage',
+        );
+
+        $template = ProductTemplate::query()
+            ->where('company_id', $this->companyId())
+            ->find($templateId);
+
+        if (! $template instanceof ProductTemplate) {
+            return;
+        }
+
+        $mapping = $this->templateCategoryMappings[$templateId] ?? [];
+        $marketplaceId = $this->nullableDefault($mapping['marketplace_id'] ?? null);
+        $categoryId = $this->nullableDefault($mapping['category_id'] ?? null);
+        $categoryTreeId = $this->nullableDefault($mapping['category_tree_id'] ?? null);
+        $metadataService = app(EbayMetadataService::class);
+
+        // The tree id is a marketplace fact, not operator input: resolve it
+        // whenever a category is present without one.
+        if ($categoryId !== null && $categoryTreeId === null && $marketplaceId !== null) {
+            try {
+                $categoryTreeId = $metadataService->defaultCategoryTreeId($this->companyId(), $marketplaceId);
+            } catch (Throwable) {
+                session()->flash('warning', __('Mapping saved, but the eBay category tree could not be resolved for “:template”. Check the eBay connection.', ['template' => $template->name]));
+            }
+        }
+
+        $metadata = $template->metadata ?? [];
+        data_set($metadata, 'marketplace.ebay.marketplace_id', $marketplaceId);
+        data_set($metadata, 'marketplace.ebay.listing_marketplace_id', $marketplaceId !== null ? EbayConfiguration::listingMarketplaceFor($marketplaceId) : null);
+        data_set($metadata, 'marketplace.ebay.category_tree_id', $categoryTreeId);
+        data_set($metadata, 'marketplace.ebay.category_id', $categoryId);
+        data_set($metadata, 'marketplace.ebay.category_label', $this->nullableDefault($mapping['category_label'] ?? null));
+
+        $template->metadata = $metadata;
+        $template->save();
+
+        // Pull the category's rules immediately so readiness enforces the
+        // right aspects and conditions with no manual refresh step. The
+        // nightly metadata-refresh schedule keeps them current afterwards.
+        if ($marketplaceId !== null && $categoryTreeId !== null && $categoryId !== null) {
+            try {
+                $companyId = $this->companyId();
+                $metadataService->categoryTree($companyId, $marketplaceId, $categoryTreeId, forceRefresh: true);
+                $metadataService->categorySubtree($companyId, $marketplaceId, $categoryTreeId, $categoryId, forceRefresh: true);
+                $metadataService->categoryAspects($companyId, $marketplaceId, $categoryTreeId, $categoryId, forceRefresh: true);
+                $metadataService->compatibilityProperties($companyId, $marketplaceId, $categoryTreeId, $categoryId, forceRefresh: true);
+                $metadataService->automotivePartsCompatibilityPolicies($companyId, $marketplaceId, [$categoryId], forceRefresh: true);
+                $metadataService->itemConditionPolicies($companyId, $marketplaceId, [$categoryId], forceRefresh: true);
+            } catch (Throwable $exception) {
+                session()->flash('warning', __('“:template” mapping saved, but eBay category rules could not be fetched yet: :message', ['template' => $template->name, 'message' => $exception->getMessage()]));
+            }
+        }
+
+        $this->loadTemplateCategoryMappings();
     }
 
     public function connectButtonLabel(): string
@@ -479,6 +613,7 @@ class Settings extends SettingsForm
                     'marketplace_id' => data_get($template->metadata, 'marketplace.ebay.marketplace_id') ?: ($pluginMapping['marketplace_id'] ?? $this->defaultMarketplaceId($template)),
                     'category_tree_id' => data_get($template->metadata, 'marketplace.ebay.category_tree_id') ?: ($pluginMapping['category_tree_id'] ?? null),
                     'category_id' => data_get($template->metadata, 'marketplace.ebay.category_id') ?: ($pluginMapping['category_id'] ?? null),
+                    'category_label' => data_get($template->metadata, 'marketplace.ebay.category_label'),
                 ]];
             })
             ->all();
@@ -496,18 +631,6 @@ class Settings extends SettingsForm
         }
 
         return app(EbayConfiguration::class)->forCompany($this->companyId())['marketplace_id'] ?? null;
-    }
-
-    private function defaultCategoryTreeId(?ProductTemplate $template): ?string
-    {
-        if (! $template instanceof ProductTemplate) {
-            return null;
-        }
-
-        $mapping = app(CommercePluginRegistry::class)
-            ->marketplaceTemplateMappingForTemplate(EbayConfiguration::CHANNEL, $template);
-
-        return $mapping['category_tree_id'] ?? null;
     }
 
     private function nullableDefault(mixed $value): ?string

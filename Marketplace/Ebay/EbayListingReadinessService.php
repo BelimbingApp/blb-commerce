@@ -72,11 +72,13 @@ class EbayListingReadinessService
             ->get();
         $aspectFacts = $this->aspectFacts($item, $metadataMarketplaceId, $categoryId, $categoryTreeId, $productReferences->all(), $existingDraft);
         $identifierAlignment = $this->identifierAlignment($aspectFacts);
+        $liveDescription = $existingDraft?->listing?->marketplaceDescriptionBody();
 
         [$blockers, $warnings] = $this->gapAnalyzer->analyze(
             $item,
             [
                 'category_id' => $categoryId,
+                'has_live_description' => is_string($liveDescription) && trim($liveDescription) !== '',
                 'policy_ids' => $policyIds,
                 'merchant_location_key' => $this->merchantLocationKey($companyId),
                 'mapped_aspects' => $mappedAspects,
@@ -222,16 +224,21 @@ class EbayListingReadinessService
                 $normalized = $this->normalizeAspectValue($value, $mapping->value_normalization);
                 $validation = $this->validateAspectValue($normalized, $mapping->enum_values);
 
-                return array_filter([
+                // 'value' must survive even when null — every fact consumer
+                // reads $fact['value'], and a mapping whose attribute has no
+                // value yet is exactly the case they need to see.
+                return [
                     'name' => $mapping->ebay_aspect_name,
                     'value' => $value,
-                    'normalized_value' => $normalized,
+                    ...array_filter([
+                        'normalized_value' => $normalized,
+                        'message' => $validation,
+                    ], fn (mixed $entry): bool => $entry !== null),
                     'source' => 'catalog_attribute',
                     'confidence' => $mapping->mapping_confidence,
                     'internal_attribute_code' => $mapping->internal_attribute_code,
                     'validation' => $validation === null ? 'ok' : 'invalid',
-                    'message' => $validation,
-                ], fn (mixed $entry): bool => $entry !== null);
+                ];
             })
             ->values()
             ->all();

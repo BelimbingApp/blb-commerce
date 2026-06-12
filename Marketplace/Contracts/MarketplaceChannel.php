@@ -30,5 +30,11 @@ interface MarketplaceChannel
      */
     public function endListing(Listing $listing): array;
 
+    /**
+     * Recompute the item's readiness draft from already-synced local state
+     * (settings, cached marketplace metadata, stored tokens). Must not call
+     * the remote marketplace: the item page re-runs this on load and after
+     * every relevant edit so the readiness verdict is never stale.
+     */
     public function refreshListingDraft(Item $item): ListingDraft;
 }

@@ -83,6 +83,8 @@ trait ManagesItemCatalogFit
         $this->selectedAttributeId = null;
         $this->attributeValue = '';
 
+        $this->refreshAllChannelReadiness();
+
         session()->flash('success', __('Catalog fit updated.'));
     }
 

@@ -452,7 +452,7 @@ $ebaySettingsTabs = [
                         <div>
                             <h2 class="text-base font-medium tracking-tight text-ink">{{ __('eBay category mappings') }}</h2>
                             <p class="mt-1 text-sm text-muted">
-                                {{ __('Map Belimbing templates to eBay category IDs before readiness checks or publishing. For US eBay Motors, use marketplace EBAY_MOTORS_US and category tree 100.') }}
+                                {{ __('Every eBay listing sits in one eBay category — it decides where buyers find the item and which item specifics eBay requires. Map each template once and every item using it inherits the category. Changes save immediately.') }}
                             </p>
                         </div>
 
@@ -465,62 +465,134 @@ $ebaySettingsTabs = [
                                         <tr>
                                             <x-ui.th>{{ __('Template') }}</x-ui.th>
                                             <x-ui.th>{{ __('Marketplace') }}</x-ui.th>
-                                            <x-ui.th>{{ __('Category tree') }}</x-ui.th>
-                                            <x-ui.th>{{ __('eBay category ID') }}</x-ui.th>
+                                            <x-ui.th>{{ __('eBay category') }}</x-ui.th>
                                         </tr>
                                     </x-slot>
 
                                         @foreach ($productTemplates as $template)
+                                            @php($mapping = $templateCategoryMappings[$template->id] ?? [])
                                             <tr wire:key="ebay-template-category-{{ $template->id }}">
-                                                <td class="px-table-cell-x py-table-cell-y">
+                                                <td class="px-table-cell-x py-table-cell-y align-middle">
                                                     <div class="text-sm font-medium text-ink">{{ $template->name }}</div>
                                                     <div class="mt-1 text-xs text-muted">{{ $template->category?->name ?? __('Any category') }}</div>
                                                 </td>
-                                                <td class="px-table-cell-x py-table-cell-y min-w-48">
-                                                    <x-ui.input
+                                                <td class="px-table-cell-x py-table-cell-y min-w-48 align-middle">
+                                                    {{-- The category tree id is derived from this choice; it is
+                                                         never asked of the operator. --}}
+                                                    <x-ui.select
                                                         id="ebay-template-{{ $template->id }}-marketplace"
-                                                        wire:model="templateCategoryMappings.{{ $template->id }}.marketplace_id"
-                                                        :label="__('Marketplace')"
+                                                        wire:model.live="templateCategoryMappings.{{ $template->id }}.marketplace_id"
+                                                        aria-label="{{ __('Marketplace for :template', ['template' => $template->name]) }}"
                                                         :error="$errors->first('templateCategoryMappings.' . $template->id . '.marketplace_id')"
-                                                    />
+                                                    >
+                                                        <option value="">{{ __('Select...') }}</option>
+                                                        @foreach (\App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration::MARKETPLACES as $marketplaceId => $marketplaceLabel)
+                                                            <option value="{{ $marketplaceId }}">{{ $marketplaceLabel }}</option>
+                                                        @endforeach
+                                                    </x-ui.select>
                                                 </td>
-                                                <td class="px-table-cell-x py-table-cell-y min-w-36">
-                                                    <x-ui.input
-                                                        id="ebay-template-{{ $template->id }}-category-tree"
-                                                        wire:model="templateCategoryMappings.{{ $template->id }}.category_tree_id"
-                                                        :label="__('Tree')"
-                                                        :error="$errors->first('templateCategoryMappings.' . $template->id . '.category_tree_id')"
-                                                    />
-                                                </td>
-                                                <td class="px-table-cell-x py-table-cell-y min-w-48">
-                                                    <x-ui.input
-                                                        id="ebay-template-{{ $template->id }}-category-id"
-                                                        wire:model="templateCategoryMappings.{{ $template->id }}.category_id"
-                                                        :label="__('Category ID')"
-                                                        :error="$errors->first('templateCategoryMappings.' . $template->id . '.category_id')"
-                                                    />
+                                                <td class="px-table-cell-x py-table-cell-y min-w-72 align-middle">
+                                                    @if (($mapping['category_id'] ?? null) !== null && trim((string) $mapping['category_id']) !== '')
+                                                        <div class="flex items-center justify-between gap-3">
+                                                            <div class="min-w-0">
+                                                                <p class="text-sm font-medium text-ink">{{ $mapping['category_label'] ?: __('Category #:id', ['id' => $mapping['category_id']]) }}</p>
+                                                                <p class="mt-0.5 font-mono text-xs text-muted">#{{ $mapping['category_id'] }}</p>
+                                                            </div>
+                                                            <x-ui.button type="button" variant="ghost" size="sm" wire:click="openCategoryPicker({{ $template->id }})">
+                                                                {{ __('Change') }}
+                                                            </x-ui.button>
+                                                        </div>
+                                                    @else
+                                                        <x-ui.button type="button" variant="outline" size="sm" wire:click="openCategoryPicker({{ $template->id }})">
+                                                            <x-icon name="heroicon-o-magnifying-glass" class="h-4 w-4" />
+                                                            {{ __('Choose category') }}
+                                                        </x-ui.button>
+                                                    @endif
                                                 </td>
                                             </tr>
                                         @endforeach
 
                             </x-ui.table>
 
-                            <div class="flex flex-wrap items-center gap-3">
-                                <x-ui.button type="button" variant="primary" wire:click="saveTemplateCategoryMappings" wire:loading.attr="disabled" wire:target="saveTemplateCategoryMappings">
-                                    <x-icon name="heroicon-o-check" class="h-4 w-4" />
-                                    {{ __('Save category mappings') }}
-                                </x-ui.button>
+                            @php($pickerTemplate = $categoryPickerTemplateId !== null ? $productTemplates->firstWhere('id', $categoryPickerTemplateId) : null)
+                            @php($pickerMapping = $categoryPickerTemplateId !== null ? ($templateCategoryMappings[$categoryPickerTemplateId] ?? []) : [])
+                            <x-ui.modal wire:model="categoryPickerOpen" class="max-w-xl">
+                                <div class="space-y-4 p-6">
+                                    <div>
+                                        <h3 class="text-base font-medium tracking-tight text-ink">{{ __('eBay category for “:template”', ['template' => $pickerTemplate?->name ?? '']) }}</h3>
+                                        <p class="mt-1 text-sm text-muted">{{ __('Search by part type and pick the best fit. The choice saves immediately and eBay’s rules for that category are fetched in the background.') }}</p>
+                                    </div>
 
-                                <x-ui.button type="button" variant="outline" wire:click="refreshMappedCategoryMetadata" wire:loading.attr="disabled" wire:target="refreshMappedCategoryMetadata">
-                                    <x-icon name="heroicon-o-arrow-path" class="h-4 w-4" />
-                                    <span wire:loading.remove wire:target="refreshMappedCategoryMetadata">{{ __('Refresh metadata') }}</span>
-                                    <span wire:loading wire:target="refreshMappedCategoryMetadata">{{ __('Refreshing...') }}</span>
-                                </x-ui.button>
+                                    @if (($pickerMapping['category_id'] ?? null) !== null && trim((string) $pickerMapping['category_id']) !== '')
+                                        <div class="flex items-center justify-between gap-3 rounded-xl border border-border-default bg-surface-subtle px-3 py-2">
+                                            <div class="min-w-0">
+                                                <p class="text-sm font-medium text-ink">{{ $pickerMapping['category_label'] ?: __('Category #:id', ['id' => $pickerMapping['category_id']]) }}</p>
+                                                <p class="mt-0.5 font-mono text-xs text-muted">#{{ $pickerMapping['category_id'] }}</p>
+                                            </div>
+                                            <x-ui.button type="button" variant="ghost" size="sm" wire:click="removeCategoryMapping" wire:confirm="{{ __('Remove this template’s eBay category mapping?') }}">
+                                                {{ __('Remove') }}
+                                            </x-ui.button>
+                                        </div>
+                                    @endif
 
-                                <p class="text-xs text-muted">
-                                    {{ __('Refresh pulls category aspects, compatibility properties, compatibility policy, and condition policy for mapped categories.') }}
-                                </p>
-                            </div>
+                                    <div class="flex items-end gap-2">
+                                        <div class="flex-1">
+                                            <x-ui.input
+                                                id="ebay-category-picker-search"
+                                                wire:model="categorySearch"
+                                                wire:keydown.enter.prevent="searchEbayCategories"
+                                                :label="__('Search eBay categories')"
+                                                :placeholder="__('Part type, e.g. alternator')"
+                                                :error="$errors->first('categorySearch')"
+                                            />
+                                        </div>
+                                        <x-ui.button type="button" variant="primary" size="sm" wire:click="searchEbayCategories" wire:loading.attr="disabled" wire:target="searchEbayCategories">
+                                            <x-icon name="heroicon-o-magnifying-glass" class="h-4 w-4" />
+                                            {{ __('Search') }}
+                                        </x-ui.button>
+                                    </div>
+
+                                    @if ($categorySuggestions !== [])
+                                        <ul class="max-h-72 space-y-1 overflow-y-auto">
+                                            @foreach ($categorySuggestions as $index => $suggestion)
+                                                <li wire:key="ebay-category-picker-suggestion-{{ $index }}">
+                                                    <button
+                                                        type="button"
+                                                        wire:click="applyEbayCategorySuggestion({{ $index }})"
+                                                        class="w-full rounded-xl border border-border-default bg-surface-subtle px-3 py-2 text-left hover:border-accent/60 hover:bg-surface-card"
+                                                    >
+                                                        <span class="block text-sm font-medium text-ink">{{ $suggestion['name'] }}</span>
+                                                        <span class="mt-0.5 block text-xs text-muted">{{ $suggestion['path'] }} <span class="font-mono">#{{ $suggestion['category_id'] }}</span></span>
+                                                    </button>
+                                                </li>
+                                            @endforeach
+                                        </ul>
+                                    @endif
+
+                                    <x-ui.disclosure :title="__('Enter the ID manually')" title-class="text-xs font-medium text-muted" content-class="mt-2">
+                                        <div class="flex items-end gap-2">
+                                            <div class="flex-1">
+                                                <x-ui.input
+                                                    id="ebay-category-picker-manual-id"
+                                                    wire:model="templateCategoryMappings.{{ $categoryPickerTemplateId ?? 0 }}.category_id"
+                                                    :label="__('eBay category ID')"
+                                                    :help="__('Numeric id, if you already know it. The category tree is resolved automatically.')"
+                                                    :error="$errors->first('templateCategoryMappings.' . ($categoryPickerTemplateId ?? 0) . '.category_id')"
+                                                />
+                                            </div>
+                                            <x-ui.button type="button" variant="outline" size="sm" wire:click="saveManualCategory">
+                                                {{ __('Save') }}
+                                            </x-ui.button>
+                                        </div>
+                                    </x-ui.disclosure>
+
+                                    <div class="flex justify-end">
+                                        <x-ui.button type="button" variant="ghost" size="sm" wire:click="closeCategoryPicker">
+                                            {{ __('Close') }}
+                                        </x-ui.button>
+                                    </div>
+                                </div>
+                            </x-ui.modal>
                         @endif
                     </div>
                 </x-ui.card>

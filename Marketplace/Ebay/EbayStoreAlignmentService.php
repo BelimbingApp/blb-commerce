@@ -309,8 +309,8 @@ class EbayStoreAlignmentService
             $recommendations[] = 'Tighten the title with brand, part type, placement, and part number.';
         }
 
-        if (collect($gapKeys)->intersect(['photos', 'publish_safe_photos', 'photo_coverage'])->isNotEmpty()) {
-            $recommendations[] = 'Add more publish-safe photos with labels, mounts, connectors, and defects.';
+        if (collect($gapKeys)->intersect(['photos', 'photo_coverage'])->isNotEmpty()) {
+            $recommendations[] = 'Add more photos with labels, mounts, connectors, and defects.';
         }
 
         if (($performance['inventory_age_days'] ?? 0) >= 45 && $performance['sale_count'] === 0) {

@@ -26,11 +26,119 @@ class EbayMetadataService
 
     public const KIND_ITEM_CONDITION_POLICIES = 'item_condition_policies';
 
+    public const KIND_DEFAULT_CATEGORY_TREE = 'default_category_tree';
+
     public function __construct(
         private readonly EbayConfiguration $configuration,
         private readonly EbayApplicationTokenService $applicationTokens,
         private readonly IntegrationGateway $integration,
     ) {}
+
+    /**
+     * The marketplace's category tree id (e.g. EBAY_MOTORS_US → 100). Static
+     * per marketplace, so operators never type it — callers resolve it from
+     * the marketplace they picked. Cached like other taxonomy metadata.
+     */
+    public function defaultCategoryTreeId(int $companyId, string $marketplaceId, bool $forceRefresh = false): string
+    {
+        $metadata = $this->pullMetadata(new EbayMetadataPull(
+            companyId: $companyId,
+            marketplaceId: $marketplaceId,
+            kind: self::KIND_DEFAULT_CATEGORY_TREE,
+            key: $marketplaceId,
+            operation: 'metadata.default_category_tree.pull',
+            path: '/commerce/taxonomy/v1/get_default_category_tree_id',
+            options: new EbayMetadataPullOptions(
+                query: ['marketplace_id' => $marketplaceId],
+                forceRefresh: $forceRefresh,
+                metadata: [],
+            ),
+        ));
+
+        $treeId = trim((string) data_get($metadata->payload, 'categoryTreeId'));
+
+        if ($treeId === '') {
+            throw new MarketplaceOperationException(
+                __('eBay returned no category tree for marketplace :marketplace.', ['marketplace' => $marketplaceId]),
+            );
+        }
+
+        return $treeId;
+    }
+
+    /**
+     * Live category search ("alternator" → ranked leaf categories with their
+     * full path), so operators pick categories by name instead of knowing
+     * eBay's numeric ids. Interactive — not cached.
+     *
+     * @return list<array{category_id: string, category_tree_id: string, name: string, path: string}>
+     */
+    public function categorySuggestions(int $companyId, string $marketplaceId, string $query): array
+    {
+        $categoryTreeId = $this->defaultCategoryTreeId($companyId, $marketplaceId);
+        $config = $this->configuration->requireApplicationConfigured($companyId);
+
+        $response = $this->integration->send(new IntegrationRequest(
+            system: EbayConfiguration::CHANNEL,
+            operation: 'commerce.marketplace.ebay.metadata.category_suggestions.pull',
+            method: 'GET',
+            endpoint: rtrim((string) $config['api_base_url'], '/').self::TAXONOMY_CATEGORY_TREE_PATH.$categoryTreeId.'/get_category_suggestions',
+            protocolOperation: 'GET '.self::TAXONOMY_CATEGORY_TREE_PATH.$categoryTreeId.'/get_category_suggestions',
+            provider: EbayConfiguration::CHANNEL,
+            headers: [
+                'Authorization' => 'Bearer '.$this->applicationTokens->accessToken($companyId),
+                'X-EBAY-C-MARKETPLACE-ID' => $marketplaceId,
+            ],
+            query: ['q' => $query],
+            ownerType: 'company',
+            ownerId: $companyId,
+            timeoutSeconds: 30,
+            retryTimes: 1,
+            metadata: [
+                'environment' => $config['environment'],
+                'marketplace_id' => $marketplaceId,
+                'category_tree_id' => $categoryTreeId,
+            ],
+        ));
+
+        if ($response->failed()) {
+            throw MarketplaceOperationException::requestFailed(
+                EbayConfiguration::CHANNEL,
+                'metadata.category_suggestions.pull',
+                $response->status,
+                $response->exchange?->id,
+            );
+        }
+
+        $payload = $response->json();
+
+        return collect(is_array($payload) ? ($payload['categorySuggestions'] ?? []) : [])
+            ->map(function (mixed $suggestion) use ($categoryTreeId): ?array {
+                $categoryId = trim((string) data_get($suggestion, 'category.categoryId'));
+                $name = trim((string) data_get($suggestion, 'category.categoryName'));
+
+                if ($categoryId === '' || $name === '') {
+                    return null;
+                }
+
+                // Ancestors arrive nearest-first; the readable path runs root → leaf.
+                $ancestors = collect(data_get($suggestion, 'categoryTreeNodeAncestors', []))
+                    ->map(fn (mixed $ancestor): string => trim((string) data_get($ancestor, 'categoryName')))
+                    ->filter()
+                    ->reverse()
+                    ->values();
+
+                return [
+                    'category_id' => $categoryId,
+                    'category_tree_id' => $categoryTreeId,
+                    'name' => $name,
+                    'path' => $ancestors->push($name)->implode(' › '),
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
 
     public function categoryTree(int $companyId, string $marketplaceId, string $categoryTreeId, bool $forceRefresh = false): MarketplaceMetadata
     {

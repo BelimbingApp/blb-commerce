@@ -219,7 +219,7 @@ test('ebay marketplace page is visible to admins', function (): void {
         ->assertDontSee('Connect eBay');
 });
 
-test('ebay settings can refresh metadata for mapped template categories', function (): void {
+test('ebay settings mapping save pulls category metadata automatically', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
     configureEbayMarketplaceForCompany($user->company_id, ['https://api.ebay.com/oauth/api_scope/sell.inventory']);
@@ -242,6 +242,7 @@ test('ebay settings can refresh metadata for mapped template categories', functi
     ]);
 
     Http::fake([
+        'https://api.sandbox.ebay.com/commerce/taxonomy/v1/get_default_category_tree_id*' => Http::response(['categoryTreeId' => '100']),
         'https://api.sandbox.ebay.com/commerce/taxonomy/v1/category_tree/100' => Http::response([
             'categoryTreeId' => '100',
             'rootCategoryNode' => ['category' => ['categoryId' => '6000', 'categoryName' => 'eBay Motors']],
@@ -263,11 +264,13 @@ test('ebay settings can refresh metadata for mapped template categories', functi
         ]),
     ]);
 
+    // Saving a mapping pulls that category's metadata bundle on its own —
+    // there is no manual "Refresh metadata" step.
     Livewire::test(EbaySettings::class)
         ->set("templateCategoryMappings.{$template->id}.marketplace_id", 'EBAY_MOTORS_US')
-        ->set("templateCategoryMappings.{$template->id}.category_tree_id", '100')
+        ->call('openCategoryPicker', $template->id)
         ->set("templateCategoryMappings.{$template->id}.category_id", '33710')
-        ->call('refreshMappedCategoryMetadata')
+        ->call('saveManualCategory')
         ->assertHasNoErrors();
 
     expect(MarketplaceMetadata::query()->where('kind', EbayMetadataService::KIND_CATEGORY_TREE)->where('key', '100')->exists())->toBeTrue()
@@ -1224,6 +1227,7 @@ test('ebay publish creates inventory compatibility offer and listing records', f
     Http::fake([
         'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item/*/product_compatibility' => Http::response([], 204),
         'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item/*' => Http::response([], 204),
+        'https://api.sandbox.ebay.com/sell/inventory/v1/offer?sku=*' => Http::response(['offers' => []]),
         'https://api.sandbox.ebay.com/sell/inventory/v1/offer' => Http::response([
             'offerId' => 'offer-publish-1',
         ], 201),
@@ -1330,6 +1334,7 @@ test('ebay offer is published to the listing marketplace while policies stay on 
     Http::fake([
         'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item/*/product_compatibility' => Http::response([], 204),
         'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item/*' => Http::response([], 204),
+        'https://api.sandbox.ebay.com/sell/inventory/v1/offer?sku=*' => Http::response(['offers' => []]),
         'https://api.sandbox.ebay.com/sell/inventory/v1/offer' => Http::response(['offerId' => 'offer-motors-1'], 201),
         'https://api.sandbox.ebay.com/sell/inventory/v1/offer/offer-motors-1/publish' => Http::response(['listingId' => '110000000001'], 200),
     ]);

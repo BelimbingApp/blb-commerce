@@ -21,11 +21,22 @@ trait ManagesItemFitments
 
     public string $fitmentNotes = '';
 
-    public string $fitmentBulk = '';
-
     public ?int $editingFitmentId = null;
 
     public ?int $copyFitmentsFromItemId = null;
+
+    /**
+     * The add/edit form stays hidden until asked for — most visits read the
+     * fitment list and never touch it.
+     */
+    public bool $fitmentFormOpen = false;
+
+    public function openFitmentForm(): void
+    {
+        $this->authorizeUpdate();
+
+        $this->fitmentFormOpen = true;
+    }
 
     public function addFitment(): void
     {
@@ -41,41 +52,9 @@ trait ManagesItemFitments
 
         $this->createFitment($validated);
         $this->resetFitmentForm();
+        $this->fitmentFormOpen = false;
         $this->item->load('fitments');
-    }
-
-    public function importFitments(): void
-    {
-        $this->authorizeUpdate();
-
-        $validated = validator([
-            'fitmentBulk' => $this->fitmentBulk,
-        ], [
-            'fitmentBulk' => ['required', 'string', 'max:10000'],
-        ])->validate();
-
-        $created = 0;
-        foreach (preg_split('/\r\n|\r|\n/', trim((string) $validated['fitmentBulk'])) ?: [] as $line) {
-            $parts = array_map('trim', str_getcsv($line));
-            if (array_filter($parts) === []) {
-                continue;
-            }
-
-            $this->createFitment([
-                'fitmentUniversal' => false,
-                'fitmentYear' => $parts[0] ?? '',
-                'fitmentMake' => $parts[1] ?? '',
-                'fitmentModel' => $parts[2] ?? '',
-                'fitmentTrim' => $parts[3] ?? '',
-                'fitmentEngine' => $parts[4] ?? '',
-                'fitmentNotes' => $parts[5] ?? '',
-            ]);
-            $created++;
-        }
-
-        $this->fitmentBulk = '';
-        $this->item->load('fitments');
-        session()->flash('success', trans_choice('Imported :count fitment entry.|Imported :count fitment entries.', $created, ['count' => $created]));
+        $this->refreshAllChannelReadiness();
     }
 
     public function deleteFitment(int $fitmentId): void
@@ -89,6 +68,7 @@ trait ManagesItemFitments
             ->delete();
 
         $this->item->load('fitments');
+        $this->refreshAllChannelReadiness();
     }
 
     public function editFitment(int $fitmentId): void
@@ -102,6 +82,7 @@ trait ManagesItemFitments
         }
 
         $this->editingFitmentId = $fitment->id;
+        $this->fitmentFormOpen = true;
         $this->fitmentUniversal = $fitment->is_universal;
         $this->fitmentYear = (string) $fitment->display_year;
         $this->fitmentMake = (string) $fitment->display_make;
@@ -139,13 +120,16 @@ trait ManagesItemFitments
         $fitment->save();
 
         $this->editingFitmentId = null;
+        $this->fitmentFormOpen = false;
         $this->resetFitmentForm();
         $this->item->load('fitments');
+        $this->refreshAllChannelReadiness();
     }
 
     public function cancelFitmentEdit(): void
     {
         $this->editingFitmentId = null;
+        $this->fitmentFormOpen = false;
         $this->resetFitmentForm();
     }
 
@@ -183,6 +167,7 @@ trait ManagesItemFitments
         ]);
 
         $this->item->load('fitments');
+        $this->refreshAllChannelReadiness();
         session()->flash('success', __('Created fitment from item attributes.'));
     }
 
@@ -234,6 +219,7 @@ trait ManagesItemFitments
         $copied = $source->fitments->count();
         $this->copyFitmentsFromItemId = null;
         $this->item->load('fitments');
+        $this->refreshAllChannelReadiness();
         session()->flash('success', trans_choice('Copied :count fitment entry.|Copied :count fitment entries.', $copied, ['count' => $copied]));
     }
 
@@ -349,5 +335,26 @@ trait ManagesItemFitments
         $codes = config('commerce.inventory.fitment_attribute_codes', []);
 
         return is_array($codes) ? array_filter($codes, 'is_string') : [];
+    }
+
+    /**
+     * Bootstrap is only offered when it would actually produce something:
+     * fitment attribute codes are configured and at least one has a value on
+     * this item. Showing the button just to answer with "no values" is noise.
+     */
+    private function canBootstrapFitmentFromAttributes(): bool
+    {
+        $codes = $this->fitmentAttributeCodes();
+
+        if ($codes === []) {
+            return false;
+        }
+
+        $this->item->loadMissing('catalogAttributeValues.attribute');
+
+        return $this->item->catalogAttributeValues
+            ->contains(fn ($value): bool => in_array($value->attribute?->code, $codes, true)
+                && is_string($value->display_value)
+                && trim($value->display_value) !== '');
     }
 }
