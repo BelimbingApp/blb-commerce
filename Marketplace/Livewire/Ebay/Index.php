@@ -10,7 +10,9 @@ use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayListingAuditService;
 use App\Modules\Commerce\Marketplace\Ebay\EbayMarketplaceChannel;
 use App\Modules\Commerce\Marketplace\Ebay\EbayOAuthService;
+use App\Modules\Commerce\Marketplace\Jobs\AdoptListingsJob;
 use App\Modules\Commerce\Marketplace\Models\Listing;
+use App\Modules\Commerce\Marketplace\Services\ListingAdoptionService;
 use App\Modules\Commerce\Marketplace\Services\MarketplaceListingPushService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
@@ -298,6 +300,66 @@ class Index extends Component
                 'linked' => $result->linked,
             ],
         ));
+    }
+
+    /**
+     * Adopt one imported listing into a linked inventory item (synchronous: a
+     * single eBay GetItem fetch). The static "Not linked" rows expose this.
+     */
+    public function adoptListing(int $listingId, ListingAdoptionService $adoptions): void
+    {
+        $this->authorizeSyncRun();
+
+        $listing = Listing::query()
+            ->where('company_id', $this->companyId())
+            ->where('channel', EbayConfiguration::CHANNEL)
+            ->where('id', $listingId)
+            ->whereNull('item_id')
+            ->first();
+
+        if ($listing === null) {
+            session()->flash('error', __('That listing is already linked or no longer available.'));
+
+            return;
+        }
+
+        try {
+            $item = $adoptions->adopt($listing);
+        } catch (Throwable $exception) {
+            session()->flash('error', __('Adoption failed: :message', ['message' => $exception->getMessage()]));
+
+            return;
+        }
+
+        session()->flash('success', __('Created inventory item :sku from the listing.', ['sku' => $item->sku]));
+    }
+
+    /**
+     * Queue adoption for every unlinked active listing — each needs its own eBay
+     * fetch, so it runs off the request as a background job.
+     */
+    public function adoptAllUnlinked(): void
+    {
+        $this->authorizeSyncRun();
+
+        $listingIds = Listing::query()
+            ->where('company_id', $this->companyId())
+            ->where('channel', EbayConfiguration::CHANNEL)
+            ->whereNull('item_id')
+            ->whereNull('ended_at')
+            ->pluck('id')
+            ->map(fn (int $id): int => $id)
+            ->all();
+
+        if ($listingIds === []) {
+            session()->flash('warning', __('No unlinked active listings to adopt.'));
+
+            return;
+        }
+
+        AdoptListingsJob::dispatch($this->companyId(), $listingIds);
+
+        session()->flash('success', __('Queued :count listing(s) for adoption — items appear as each finishes.', ['count' => count($listingIds)]));
     }
 
     public function render(EbayConfiguration $configuration, EbayOAuthService $oauth): View

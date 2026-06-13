@@ -92,6 +92,12 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                             <h2 class="text-base font-medium tracking-tight text-ink">{{ __('eBay Listings') }}</h2>
                             <x-ui.badge>{{ $listings->total() }}</x-ui.badge>
                             <span class="text-xs text-muted">{{ __('Mirrors your eBay active listings after a pull.') }}</span>
+                            @if ($stats['unlinkedListings'] > 0)
+                                <x-ui.button type="button" size="sm" variant="outline" wire:click="adoptAllUnlinked" wire:loading.attr="disabled" wire:target="adoptAllUnlinked">
+                                    <x-icon name="heroicon-o-plus-circle" class="h-4 w-4" />
+                                    {{ __('Adopt all unlinked (:count)', ['count' => $stats['unlinkedListings']]) }}
+                                </x-ui.button>
+                            @endif
                         </div>
                         <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
                             <x-ui.checkbox
@@ -150,7 +156,7 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                                         <div class="mt-1 max-w-sm truncate text-xs text-muted">{{ $listing->item->title }}</div>
                                     @else
                                         <x-ui.badge variant="warning">{{ __('Not linked') }}</x-ui.badge>
-                                        <div class="mt-1 text-xs text-muted">{{ __('Create a Belimbing item for this listing.') }}</div>
+                                        <div class="mt-1 text-xs text-muted">{{ __('Use Adopt to create a linked item.') }}</div>
                                     @endif
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
@@ -169,6 +175,12 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                                         <x-ui.button type="button" size="sm" variant="outline" wire:click="openListingModal({{ $listing->id }})">
                                             <x-icon name="heroicon-o-pencil-square" class="h-4 w-4" />
                                             {{ __('Edit & push') }}
+                                        </x-ui.button>
+                                    @else
+                                        <x-ui.button type="button" size="sm" variant="outline" wire:click="adoptListing({{ $listing->id }})" wire:loading.attr="disabled" wire:target="adoptListing({{ $listing->id }})">
+                                            <x-icon name="heroicon-o-plus-circle" class="h-4 w-4" />
+                                            <span wire:loading.remove wire:target="adoptListing({{ $listing->id }})">{{ __('Adopt') }}</span>
+                                            <span wire:loading wire:target="adoptListing({{ $listing->id }})">{{ __('Adopting…') }}</span>
                                         </x-ui.button>
                                     @endif
                                 </td>

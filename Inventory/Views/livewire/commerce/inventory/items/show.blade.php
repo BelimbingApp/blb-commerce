@@ -819,7 +819,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                 <div wire:key="item-photo-{{ $photo->id }}" class="group relative overflow-hidden rounded-2xl border border-border-default bg-surface-subtle">
                                     @if ($asset)
                                         <img
-                                            src="{{ $asset->streamUrl() }}"
+                                            src="{{ $asset->displayUrl() }}"
                                             alt="{{ $filename }}"
                                             class="aspect-square w-full object-cover"
                                             loading="lazy"
