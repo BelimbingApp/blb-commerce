@@ -284,6 +284,18 @@ class EbayMarketplaceChannel implements MarketplaceChannel
     }
 
     /**
+     * Fetch one listing's full detail (photos, item specifics, parts
+     * compatibility, description, category) for adoption enrichment. Read-only;
+     * never mutates the live listing.
+     *
+     * @return array{item_id: string, title: string, sku: string|null, price_amount: int|null, currency_code: string|null, quantity: int|null, description: string|null, condition_id: string|null, condition_display: string|null, category_id: string|null, photo_urls: list<string>, specifics: array<string, string>, compatibility: list<array{year: string|null, make: string|null, model: string|null, trim: string|null, engine: string|null, properties: array<string, string>}>}
+     */
+    public function fetchListingDetail(int $companyId, string $listingId): array
+    {
+        return $this->trading->getItem($companyId, $listingId);
+    }
+
+    /**
      * Import selected seller listings into Belimbing as listing records, so the
      * whole store is visible. These come straight from the Trading API and are
      * legacy (no Inventory-API offer yet) — adopting them for revise/end is the
