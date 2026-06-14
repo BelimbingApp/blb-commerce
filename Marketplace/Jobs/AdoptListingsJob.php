@@ -2,6 +2,7 @@
 
 namespace App\Modules\Commerce\Marketplace\Jobs;
 
+use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Models\Listing;
 use App\Modules\Commerce\Marketplace\Services\ListingAdoptionService;
 use Illuminate\Bus\Queueable;
@@ -34,13 +35,27 @@ class AdoptListingsJob implements ShouldQueue
 
     public function handle(ListingAdoptionService $adoptions): void
     {
-        $listings = Listing::query()
+        // Only ids (light) and only unlinked eBay listings — defensive against a
+        // batch that includes non-eBay or already-linked ids, and avoids loading
+        // hundreds of full models at once.
+        $listingIds = Listing::query()
             ->where('company_id', $this->companyId)
             ->whereIn('id', $this->listingIds)
+            ->where('channel', EbayConfiguration::CHANNEL)
             ->whereNull('item_id')
-            ->get();
+            ->pluck('id');
 
-        foreach ($listings as $listing) {
+        foreach ($listingIds as $listingId) {
+            $listing = Listing::query()
+                ->where('company_id', $this->companyId)
+                ->where('channel', EbayConfiguration::CHANNEL)
+                ->whereNull('item_id')
+                ->find($listingId);
+
+            if ($listing === null) {
+                continue;
+            }
+
             try {
                 $adoptions->adopt($listing);
             } catch (Throwable $exception) {

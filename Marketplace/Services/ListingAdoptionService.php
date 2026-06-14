@@ -53,6 +53,16 @@ class ListingAdoptionService
     public function createItemFromDetail(Listing $listing, array $detail): Item
     {
         return DB::transaction(function () use ($listing, $detail): Item {
+            // Lock the row and re-check inside the transaction so a concurrent
+            // adoption (row-level Adopt racing the Adopt-all job) cannot create
+            // duplicate items for the same listing.
+            $locked = Listing::query()->whereKey($listing->id)->lockForUpdate()->first();
+
+            if ($locked !== null && $locked->item_id !== null) {
+                return $locked->item ?? Item::query()->findOrFail($locked->item_id);
+            }
+
+            $listing = $locked ?? $listing;
             $companyId = $listing->company_id;
 
             $sku = $this->firstNonEmpty([$detail['sku'] ?? null, $listing->external_sku]);
@@ -205,8 +215,8 @@ class ListingAdoptionService
         $template = ProductTemplate::query()
             ->where('company_id', $companyId)
             ->where('is_active', true)
-            ->get()
-            ->first(fn (ProductTemplate $template): bool => (string) data_get($template->metadata, 'marketplace.ebay.category_id') === $ebayCategoryId);
+            ->where('metadata->marketplace->ebay->category_id', $ebayCategoryId)
+            ->first();
 
         return $template !== null ? [$template->id, $template->category_id] : [null, null];
     }
