@@ -19,6 +19,7 @@ return new class extends Migration
                 ->restrictOnDelete();
 
             $table->unsignedInteger('sort_order')->default(0);
+            $table->boolean('use_cleaned_photo')->default(false);
 
             $table->timestamps();
 
