@@ -1,6 +1,7 @@
 <?php
 
 use App\Base\Media\Models\MediaAsset;
+use App\Base\Media\Services\MediaAssetStore;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
 use App\Modules\Commerce\Catalog\Models\Attribute as CatalogAttribute;
@@ -16,6 +17,7 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
 use App\Modules\Commerce\Inventory\Services\DefaultCurrencyResolver;
 use App\Modules\Commerce\Marketplace\Models\ListingDraft;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 
@@ -299,6 +301,129 @@ test('item photos can be uploaded and deleted from the detail page component', f
     expect(ItemPhoto::query()->whereKey($photo->id)->exists())->toBeFalse();
     expect(MediaAsset::query()->whereKey($asset->id)->exists())->toBeFalse();
     Storage::disk('local')->assertMissing($asset->storage_key);
+});
+
+function createInventoryItemPhoto(Item $item, string $bytes = 'ORIGINAL-JPEG-BYTES', int $sortOrder = 0): ItemPhoto
+{
+    $storageKey = 'commerce/inventory/item-photos/'.$item->id.'/photo-'.$sortOrder.'.jpg';
+
+    Storage::disk('local')->put($storageKey, $bytes);
+
+    $asset = app(MediaAssetStore::class)->storeOriginal('local', $storageKey, [
+        'original_filename' => 'photo-'.$sortOrder.'.jpg',
+        'mime_type' => 'image/jpeg',
+        'file_size' => strlen($bytes),
+    ]);
+
+    return ItemPhoto::query()->create([
+        'item_id' => $item->id,
+        'media_asset_id' => $asset->id,
+        'sort_order' => $sortOrder,
+    ]);
+}
+
+test('runPhotoCleanup creates a background_removed derivative without switching the item to use it', function (): void {
+    Storage::fake('local');
+    configurePhotoRoomSandbox();
+
+    Http::fake([
+        'https://sdk.photoroom.com/*' => Http::response('CLEANED-PNG-BYTES', 200),
+    ]);
+
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $item = Item::factory()->create(['company_id' => $user->company_id]);
+    $photo = createInventoryItemPhoto($item);
+
+    Livewire::test(Show::class, ['item' => $item])
+        ->call('runPhotoCleanup', $photo->id)
+        ->assertHasNoErrors();
+
+    $photo->refresh();
+
+    expect($photo->cleanedAsset)->toBeInstanceOf(MediaAsset::class)
+        ->and($photo->cleanedAsset->kind)->toBe(MediaAsset::KIND_BACKGROUND_REMOVED)
+        ->and($photo->use_cleaned_photo)->toBeFalse();
+
+    Storage::disk('local')->assertExists($photo->cleanedAsset->storage_key);
+});
+
+test('runPhotoCleanup surfaces a flash error when PhotoRoom is not configured', function (): void {
+    Storage::fake('local');
+
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $item = Item::factory()->create(['company_id' => $user->company_id]);
+    $photo = createInventoryItemPhoto($item);
+
+    Livewire::test(Show::class, ['item' => $item])
+        ->call('runPhotoCleanup', $photo->id)
+        ->assertHasNoErrors();
+
+    expect($photo->refresh()->cleanedAsset)->toBeNull();
+});
+
+test('runPhotoCleanupBatch only cleans photos without an existing derivative', function (): void {
+    Storage::fake('local');
+    configurePhotoRoomSandbox();
+
+    Http::fake([
+        'https://sdk.photoroom.com/*' => Http::response('CLEANED-PNG-BYTES', 200),
+    ]);
+
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $item = Item::factory()->create(['company_id' => $user->company_id]);
+    $uncleaned = createInventoryItemPhoto($item, 'FIRST-JPEG-BYTES', 0);
+    $alreadyCleaned = createInventoryItemPhoto($item, 'SECOND-JPEG-BYTES', 1);
+    $existingDerivative = backgroundRemovedDerivative($alreadyCleaned->mediaAsset);
+
+    Livewire::test(Show::class, ['item' => $item])
+        ->call('runPhotoCleanupBatch')
+        ->assertHasNoErrors();
+
+    expect($uncleaned->fresh('cleanedAsset')->cleanedAsset)->toBeInstanceOf(MediaAsset::class)
+        ->and($alreadyCleaned->fresh('cleanedAsset')->cleanedAsset->id)->toBe($existingDerivative->id)
+        ->and(MediaAsset::query()->where('kind', MediaAsset::KIND_BACKGROUND_REMOVED)->count())->toBe(2);
+});
+
+test('a cleaned photo can be accepted and reverted for marketplace listings', function (): void {
+    Storage::fake('local');
+
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $item = Item::factory()->create(['company_id' => $user->company_id]);
+    $photo = createInventoryItemPhoto($item);
+    backgroundRemovedDerivative($photo->mediaAsset);
+
+    Livewire::test(Show::class, ['item' => $item])
+        ->call('acceptCleanedPhoto', $photo->id);
+
+    expect($photo->refresh()->use_cleaned_photo)->toBeTrue();
+
+    Livewire::test(Show::class, ['item' => $item->fresh()])
+        ->call('revertCleanedPhoto', $photo->id);
+
+    expect($photo->refresh()->use_cleaned_photo)->toBeFalse();
+});
+
+test('acceptCleanedPhoto is a no-op when no cleaned derivative exists', function (): void {
+    Storage::fake('local');
+
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $item = Item::factory()->create(['company_id' => $user->company_id]);
+    $photo = createInventoryItemPhoto($item);
+
+    Livewire::test(Show::class, ['item' => $item])
+        ->call('acceptCleanedPhoto', $photo->id);
+
+    expect($photo->refresh()->use_cleaned_photo)->toBeFalse();
 });
 
 test('item fitments can be added and removed from the detail page component', function (): void {

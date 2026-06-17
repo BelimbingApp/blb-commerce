@@ -122,3 +122,51 @@ test('an eBay picture upload rejection surfaces as a marketplace exception', fun
 
     app(EbayPictureService::class)->ensureHostedPhotos($item);
 })->throws(MarketplaceOperationException::class, 'The picture format is not supported.');
+
+test('the cleaned derivative is uploaded once the operator accepts it for listings', function (): void {
+    $user = createAdminUser();
+    $item = createPictureServiceItem($user->company_id);
+
+    $photo = $item->photos()->first();
+    $cleaned = backgroundRemovedDerivative($photo->mediaAsset, 'cleaned-png-bytes');
+    $photo->update(['use_cleaned_photo' => true]);
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/ws/api.dll' => Http::response(
+            epsResponse('http://i.sandbox.ebayimg.com/00/s/CLEAN/$_1.PNG?set_id=880000500F'),
+        ),
+    ]);
+
+    $urls = app(EbayPictureService::class)->ensureHostedPhotos($item->fresh());
+
+    expect($urls)->toBe(['https://i.sandbox.ebayimg.com/00/s/CLEAN/$_1.PNG?set_id=880000500F']);
+
+    expect($cleaned->fresh()->metadata['public_url'])->toBe('https://i.sandbox.ebayimg.com/00/s/CLEAN/$_1.PNG?set_id=880000500F')
+        ->and($photo->mediaAsset->fresh()->metadata)->toBeNull();
+
+    Http::assertSent(function ($request): bool {
+        return str_contains((string) $request->body(), 'cleaned-png-bytes');
+    });
+});
+
+test('the original photo is uploaded while a cleaned derivative exists but has not been accepted', function (): void {
+    $user = createAdminUser();
+    $item = createPictureServiceItem($user->company_id);
+
+    $photo = $item->photos()->first();
+    backgroundRemovedDerivative($photo->mediaAsset);
+
+    Http::fake([
+        'https://api.sandbox.ebay.com/ws/api.dll' => Http::response(
+            epsResponse('http://i.sandbox.ebayimg.com/00/s/ORIG/$_1.JPG?set_id=880000500F'),
+        ),
+    ]);
+
+    $urls = app(EbayPictureService::class)->ensureHostedPhotos($item->fresh());
+
+    expect($urls)->toBe(['https://i.sandbox.ebayimg.com/00/s/ORIG/$_1.JPG?set_id=880000500F']);
+
+    Http::assertSent(function ($request): bool {
+        return str_contains((string) $request->body(), 'fake-jpeg-bytes');
+    });
+});

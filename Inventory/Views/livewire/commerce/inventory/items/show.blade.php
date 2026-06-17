@@ -806,7 +806,23 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                 <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Media') }}</h2>
                                 <p class="mt-1 text-sm text-muted">{{ __('Buyer-facing photos used by marketplace listing drafts.') }}</p>
                             </div>
-                            <x-ui.badge>{{ $item->photos->count() }}</x-ui.badge>
+                            <div class="flex items-center gap-2">
+                                @if ($this->canEdit() && $item->photos->isNotEmpty())
+                                    <x-ui.button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        wire:click="runPhotoCleanupBatch"
+                                        wire:loading.attr="disabled"
+                                        wire:target="runPhotoCleanupBatch"
+                                        title="{{ __('Remove the background from every photo that does not already have a cleaned version.') }}"
+                                    >
+                                        <x-icon name="heroicon-o-sparkles" class="h-4 w-4" />
+                                        {{ __('Clean photos') }}
+                                    </x-ui.button>
+                                @endif
+                                <x-ui.badge>{{ $item->photos->count() }}</x-ui.badge>
+                            </div>
                         </div>
 
                     @if ($item->photos->isEmpty())
@@ -814,29 +830,82 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                     @else
                         <div class="grid grid-cols-2 gap-3">
                             @foreach ($item->photos as $photo)
-                                @php($asset = $photo->mediaAsset)
-                                @php($filename = $asset?->original_filename ?? '')
-                                <div wire:key="item-photo-{{ $photo->id }}" class="group relative overflow-hidden rounded-2xl border border-border-default bg-surface-subtle">
-                                    @if ($asset)
-                                        <img
-                                            src="{{ $asset->displayUrl() }}"
-                                            alt="{{ $filename }}"
-                                            class="aspect-square w-full object-cover"
-                                            loading="lazy"
-                                        />
-                                    @endif
+                                @php($displayAsset = $photo->displayAsset())
+                                @php($cleanedAsset = $photo->cleanedAsset)
+                                @php($filename = $displayAsset?->original_filename ?? '')
+                                <div wire:key="item-photo-{{ $photo->id }}" class="overflow-hidden rounded-2xl border border-border-default bg-surface-subtle">
+                                    <div class="group relative">
+                                        @if ($displayAsset)
+                                            <img
+                                                src="{{ $displayAsset->displayUrl() }}"
+                                                alt="{{ $filename }}"
+                                                class="aspect-square w-full object-cover"
+                                                loading="lazy"
+                                            />
+                                        @endif
+
+                                        @if ($cleanedAsset)
+                                            <x-ui.badge :variant="$photo->use_cleaned_photo ? 'success' : 'default'" class="absolute left-2 top-2">
+                                                {{ $photo->use_cleaned_photo ? __('Cleaned') : __('Original') }}
+                                            </x-ui.badge>
+                                        @endif
+
+                                        @if ($this->canEdit())
+                                            <button
+                                                type="button"
+                                                wire:click="deletePhoto({{ $photo->id }})"
+                                                wire:confirm="{{ __('Remove this photo?') }}"
+                                                class="absolute right-2 top-2 inline-flex items-center justify-center rounded-full bg-surface-card/90 p-1.5 text-muted opacity-0 shadow-sm transition-opacity group-hover:opacity-100 hover:text-status-danger"
+                                                aria-label="{{ __('Remove photo') }}"
+                                                title="{{ __('Remove') }}"
+                                            >
+                                                <x-icon name="heroicon-o-trash" class="h-4 w-4" />
+                                            </button>
+                                        @endif
+                                    </div>
 
                                     @if ($this->canEdit())
-                                        <button
-                                            type="button"
-                                            wire:click="deletePhoto({{ $photo->id }})"
-                                            wire:confirm="{{ __('Remove this photo?') }}"
-                                            class="absolute right-2 top-2 inline-flex items-center justify-center rounded-full bg-surface-card/90 p-1.5 text-muted opacity-0 shadow-sm transition-opacity group-hover:opacity-100 hover:text-status-danger"
-                                            aria-label="{{ __('Remove photo') }}"
-                                            title="{{ __('Remove') }}"
-                                        >
-                                            <x-icon name="heroicon-o-trash" class="h-4 w-4" />
-                                        </button>
+                                        <div class="flex flex-col gap-2 border-t border-border-default p-2">
+                                            @if ($cleanedAsset)
+                                                @php($cleanedAt = data_get($cleanedAsset->metadata, 'cleaned_at'))
+                                                @php($cleanEnvironment = data_get($cleanedAsset->metadata, 'environment', __('unknown')))
+                                                @php($cleanProvider = data_get($cleanedAsset->metadata, 'provider_label')
+                                                    ?: \Illuminate\Support\Str::headline((string) data_get($cleanedAsset->metadata, 'provider', __('cleanup provider'))))
+                                                <p class="text-[11px] text-muted">
+                                                    {{ __('Cleaned :time via :provider (:environment)', [
+                                                        'time' => $cleanedAt ? \Illuminate\Support\Carbon::parse($cleanedAt)->diffForHumans() : __('recently'),
+                                                        'provider' => $cleanProvider,
+                                                        'environment' => $cleanEnvironment,
+                                                    ]) }}
+                                                </p>
+                                            @endif
+
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                @if ($cleanedAsset)
+                                                    @if ($photo->use_cleaned_photo)
+                                                        <x-ui.button type="button" variant="outline" size="sm" wire:click="revertCleanedPhoto({{ $photo->id }})" wire:loading.attr="disabled" wire:target="revertCleanedPhoto({{ $photo->id }}),runPhotoCleanupBatch">
+                                                            <x-icon name="heroicon-o-arrow-uturn-left" class="h-3.5 w-3.5" />
+                                                            {{ __('Use original') }}
+                                                        </x-ui.button>
+                                                    @else
+                                                        <x-ui.button type="button" variant="outline" size="sm" wire:click="acceptCleanedPhoto({{ $photo->id }})" wire:loading.attr="disabled" wire:target="acceptCleanedPhoto({{ $photo->id }}),runPhotoCleanupBatch">
+                                                            <x-icon name="heroicon-o-check" class="h-3.5 w-3.5" />
+                                                            {{ __('Use cleaned') }}
+                                                        </x-ui.button>
+                                                    @endif
+
+                                                    <x-ui.button type="button" variant="ghost" size="sm" wire:click="runPhotoCleanup({{ $photo->id }})" wire:loading.attr="disabled" wire:target="runPhotoCleanup({{ $photo->id }}),runPhotoCleanupBatch">
+                                                        <x-icon name="heroicon-o-arrow-path" class="h-3.5 w-3.5" />
+                                                        {{ __('Retry') }}
+                                                    </x-ui.button>
+                                                @else
+                                                    <x-ui.button type="button" variant="outline" size="sm" wire:click="runPhotoCleanup({{ $photo->id }})" wire:loading.attr="disabled" wire:target="runPhotoCleanup({{ $photo->id }}),runPhotoCleanupBatch">
+                                                        <x-icon name="heroicon-o-sparkles" class="h-3.5 w-3.5" />
+                                                        {{ __('Clean photo') }}
+                                                    </x-ui.button>
+                                                @endif
+                                            </div>
+                                        </div>
                                     @endif
                                 </div>
                             @endforeach
@@ -866,7 +935,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                 @error('photoFiles') <p class="mt-1 text-sm text-status-danger">{{ $message }}</p> @enderror
                                 @error('photoFiles.*') <p class="mt-1 text-sm text-status-danger">{{ $message }}</p> @enderror
                                 @if (! $errors->has('photoFiles') && ! $errors->has('photoFiles.*'))
-                                    <x-ui.field-help :hint="__('Raw photos from phone or desktop. Cleaned versions will be stored later as derived assets.')" />
+                                    <x-ui.field-help :hint="__('Raw photos from phone or desktop. Use Clean photos afterwards to remove backgrounds for listings.')" />
                                 @endif
                             </div>
 

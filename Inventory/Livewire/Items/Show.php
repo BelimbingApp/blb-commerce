@@ -6,6 +6,8 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Base\Foundation\ValueObjects\Money;
+use App\Base\Media\Models\MediaAsset;
+use App\Base\Media\PhotoCleanup\PhotoCleanupException;
 use App\Modules\Commerce\Catalog\Models\Category;
 use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Inventory\Livewire\Items\Concerns\ManagesItemAttributes;
@@ -41,6 +43,15 @@ class Show extends Component
     public Item $item;
 
     /**
+     * Photo sub-relations every photo action reads or re-renders. Held in one
+     * place so the load sites cannot drift apart (the cleaned/original badge
+     * and cleanup actions all depend on both being present).
+     *
+     * @var list<string>
+     */
+    private const PHOTO_RELATIONS = ['photos.mediaAsset', 'photos.cleanedAsset'];
+
+    /**
      * @var array<int, mixed>
      */
     public array $photoFiles = [];
@@ -53,7 +64,13 @@ class Show extends Component
             abort(404);
         }
 
-        $this->item = $item->load('category', 'productTemplate', 'photos', 'fitments', 'catalogAttributeValues.attribute');
+        $this->item = $item->load([
+            'category',
+            'productTemplate',
+            'fitments',
+            'catalogAttributeValues.attribute',
+            ...self::PHOTO_RELATIONS,
+        ]);
         $this->catalogCategoryId = $this->item->category_id;
         $this->catalogProductTemplateId = $this->item->product_template_id;
         $this->currencyCode = (string) $this->item->currency_code;
@@ -246,7 +263,7 @@ class Show extends Component
         });
 
         $this->photoFiles = [];
-        $this->item->load('photos');
+        $this->item->load(self::PHOTO_RELATIONS);
         $this->refreshAllChannelReadiness();
     }
 
@@ -261,7 +278,123 @@ class Show extends Component
 
         $items->deletePhoto($photo);
 
-        $this->item->load('photos');
+        $this->item->load(self::PHOTO_RELATIONS);
+        $this->refreshAllChannelReadiness();
+    }
+
+    /**
+     * Run background removal on one photo, creating or replacing its cleaned
+     * derivative. Does not change which version (original or cleaned) the item
+     * currently uses for listings.
+     */
+    public function runPhotoCleanup(int $photoId, InventoryItemService $items): void
+    {
+        $this->authorizeUpdate();
+
+        $this->item->loadMissing(self::PHOTO_RELATIONS);
+
+        $photo = $this->item->photos->firstWhere('id', $photoId);
+        if (! $photo instanceof ItemPhoto) {
+            return;
+        }
+
+        try {
+            $items->cleanPhoto($photo, $this->item->company_id);
+            session()->flash('success', __('Photo cleaned. Review the result before using it on a listing.'));
+        } catch (PhotoCleanupException $exception) {
+            session()->flash('error', $exception->getMessage());
+        }
+
+        $this->item->load(self::PHOTO_RELATIONS);
+    }
+
+    /**
+     * Run background removal on every photo that does not already have a
+     * cleaned derivative. Already-cleaned photos are left as-is — use
+     * runPhotoCleanup to retry an individual photo.
+     */
+    public function runPhotoCleanupBatch(InventoryItemService $items): void
+    {
+        $this->authorizeUpdate();
+
+        $this->item->loadMissing(self::PHOTO_RELATIONS);
+
+        $cleaned = 0;
+        $failed = 0;
+        $errorMessage = null;
+
+        foreach ($this->item->photos as $photo) {
+            if ($photo->cleanedAsset instanceof MediaAsset) {
+                continue;
+            }
+
+            try {
+                $items->cleanPhoto($photo, $this->item->company_id);
+                $cleaned++;
+            } catch (PhotoCleanupException $exception) {
+                $failed++;
+                $errorMessage ??= $exception->getMessage();
+            }
+        }
+
+        $this->item->load(self::PHOTO_RELATIONS);
+
+        if ($cleaned === 0 && $failed === 0) {
+            session()->flash('success', __('All photos already have a cleaned version.'));
+
+            return;
+        }
+
+        if ($failed > 0) {
+            session()->flash($cleaned > 0 ? 'warning' : 'error', __(':cleaned cleaned, :failed failed: :message', [
+                'cleaned' => $cleaned,
+                'failed' => $failed,
+                'message' => $errorMessage,
+            ]));
+
+            return;
+        }
+
+        session()->flash('success', trans_choice(':count photo cleaned.|:count photos cleaned.', $cleaned, ['count' => $cleaned]));
+    }
+
+    /**
+     * Switch this photo to use its cleaned derivative for marketplace
+     * listings. Reversible via revertCleanedPhoto.
+     */
+    public function acceptCleanedPhoto(int $photoId, InventoryItemService $items): void
+    {
+        $this->applyUseCleanedPhoto($photoId, true, $items);
+    }
+
+    /**
+     * Switch this photo back to its original for marketplace listings. The
+     * cleaned derivative is kept, so this can be re-accepted without
+     * re-running cleanup.
+     */
+    public function revertCleanedPhoto(int $photoId, InventoryItemService $items): void
+    {
+        $this->applyUseCleanedPhoto($photoId, false, $items);
+    }
+
+    private function applyUseCleanedPhoto(int $photoId, bool $useCleanedPhoto, InventoryItemService $items): void
+    {
+        $this->authorizeUpdate();
+
+        $this->item->loadMissing(self::PHOTO_RELATIONS);
+
+        $photo = $this->item->photos->firstWhere('id', $photoId);
+        if (! $photo instanceof ItemPhoto) {
+            return;
+        }
+
+        if ($useCleanedPhoto && ! ($photo->cleanedAsset instanceof MediaAsset)) {
+            return;
+        }
+
+        $items->setUseCleanedPhoto($photo, $useCleanedPhoto);
+
+        $this->item->load(self::PHOTO_RELATIONS);
         $this->refreshAllChannelReadiness();
     }
 

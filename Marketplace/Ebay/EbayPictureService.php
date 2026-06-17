@@ -46,14 +46,14 @@ class EbayPictureService
      */
     public function ensureHostedPhotos(Item $item): array
     {
-        $item->loadMissing('photos.mediaAsset');
+        $item->loadMissing('photos.mediaAsset', 'photos.cleanedAsset');
 
         $config = null;
         $accessToken = null;
         $urls = [];
 
         foreach ($item->photos->sortBy('sort_order')->values() as $photo) {
-            $asset = $photo->mediaAsset;
+            $asset = $photo->displayAsset();
 
             if (! $asset instanceof MediaAsset) {
                 continue;
