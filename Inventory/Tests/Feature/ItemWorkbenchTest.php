@@ -179,6 +179,8 @@ test('authenticated users can view an inventory item detail page', function (): 
     $this->actingAs($user)
         ->get(route('commerce.inventory.items.show', $item))
         ->assertOk()
+        ->assertSee('History')
+        ->assertSeeHtml('wire:click="open"')
         ->assertSee('ITEM-SHOW123')
         ->assertSee('Mirrorless camera body')
         ->assertSee('Includes battery and charger.')

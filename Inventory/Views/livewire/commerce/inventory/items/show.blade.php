@@ -13,6 +13,13 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
     <div class="space-y-section-gap">
         <x-ui.page-header :title="$item->title" :subtitle="$item->sku">
             <x-slot name="actions">
+                <x-ui.record-history
+                    :title="__('History for :sku', ['sku' => $item->sku])"
+                    :subjects="[['name' => 'item', 'id' => $item->id]]"
+                    :auditable-type="$item->getMorphClass()"
+                    :auditable-id="$item->id"
+                    source-capability="commerce.inventory.item.view"
+                />
                 <x-ui.button variant="ghost" as="a" href="{{ route('commerce.inventory.items.index') }}" wire:navigate>
                     <x-icon name="heroicon-o-arrow-left" class="w-4 h-4" />
                     {{ __('Back') }}
