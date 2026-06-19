@@ -57,6 +57,11 @@ class ListingDraft extends Model
     /**
      * @var list<string>
      */
+    protected array $auditExclude = ['metadata_checked_at', 'readiness_snapshot'];
+
+    /**
+     * @var list<string>
+     */
     protected $fillable = [
         'company_id',
         'item_id',
@@ -164,5 +169,13 @@ class ListingDraft extends Model
             ->filter(fn (mixed $key): bool => is_string($key) && trim($key) !== '')
             ->values()
             ->all();
+    }
+
+    /**
+     * @return array{name: string, id: int}|null
+     */
+    public function getAuditSubject(): ?array
+    {
+        return $this->item_id !== null ? ['name' => 'item', 'id' => (int) $this->item_id] : null;
     }
 }

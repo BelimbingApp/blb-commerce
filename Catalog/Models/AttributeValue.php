@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Catalog\Models;
 
 use App\Modules\Commerce\Catalog\Database\Factories\AttributeValueFactory;
@@ -61,5 +62,13 @@ class AttributeValue extends Model
     public function attribute(): BelongsTo
     {
         return $this->belongsTo(Attribute::class);
+    }
+
+    /**
+     * @return array{name: string, id: int}|null
+     */
+    public function getAuditSubject(): ?array
+    {
+        return $this->item_id !== null ? ['name' => 'item', 'id' => (int) $this->item_id] : null;
     }
 }

@@ -105,4 +105,12 @@ class ItemFitment extends Model
             $this->display_engine,
         ])->filter()->implode(' ');
     }
+
+    /**
+     * @return array{name: string, id: int}|null
+     */
+    public function getAuditSubject(): ?array
+    {
+        return $this->item_id !== null ? ['name' => 'item', 'id' => (int) $this->item_id] : null;
+    }
 }

@@ -81,6 +81,11 @@ class Listing extends Model
     /**
      * @var list<string>
      */
+    protected array $auditExclude = ['last_synced_at', 'raw_payload'];
+
+    /**
+     * @var list<string>
+     */
     protected $fillable = [
         'company_id',
         'item_id',
@@ -196,5 +201,13 @@ class Listing extends Model
             ?? data_get($this->raw_payload, 'publish_contract.inventory_item.product.description');
 
         return is_string($body) && trim($body) !== '' ? $body : null;
+    }
+
+    /**
+     * @return array{name: string, id: int}|null
+     */
+    public function getAuditSubject(): ?array
+    {
+        return $this->item_id !== null ? ['name' => 'item', 'id' => (int) $this->item_id] : null;
     }
 }

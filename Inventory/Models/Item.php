@@ -148,4 +148,12 @@ class Item extends Model
     {
         return $this->hasMany(Listing::class, 'item_id');
     }
+
+    /**
+     * @return array{name: string, id: int}|null
+     */
+    public function getAuditSubject(): ?array
+    {
+        return $this->id !== null ? ['name' => 'item', 'id' => (int) $this->id] : null;
+    }
 }

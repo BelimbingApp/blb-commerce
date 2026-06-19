@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Inventory\Models;
 
 use App\Base\Media\Models\MediaAsset;
@@ -94,5 +95,13 @@ class ItemPhoto extends Model
         }
 
         return $this->mediaAsset;
+    }
+
+    /**
+     * @return array{name: string, id: int}|null
+     */
+    public function getAuditSubject(): ?array
+    {
+        return $this->item_id !== null ? ['name' => 'item', 'id' => (int) $this->item_id] : null;
     }
 }
