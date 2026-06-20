@@ -27,40 +27,11 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
             </x-slot>
         </x-ui.page-header>
 
-        {{-- Action feedback surfaces as a fixed top-right toast so it is visible no
-             matter where on the page the action was triggered (e.g. the Push button
-             low in the channels card). Success/warning self-dismiss; errors persist. --}}
-        <x-ui.flash-stack>
-            @if (session('success'))
-                <div
-                    wire:key="flash-success-{{ md5((string) session('success')) }}"
-                    x-data="{ show: true }"
-                    x-init="setTimeout(() => show = false, 5000)"
-                    x-show="show"
-                    x-transition.opacity.scale.duration.200ms
-                >
-                    <x-ui.flash variant="success">{{ session('success') }}</x-ui.flash>
-                </div>
-            @endif
-
-            @if (session('warning'))
-                <div
-                    wire:key="flash-warning-{{ md5((string) session('warning')) }}"
-                    x-data="{ show: true }"
-                    x-init="setTimeout(() => show = false, 7000)"
-                    x-show="show"
-                    x-transition.opacity.scale.duration.200ms
-                >
-                    <x-ui.flash variant="warning">{{ session('warning') }}</x-ui.flash>
-                </div>
-            @endif
-
-            @if (session('error'))
-                <div wire:key="flash-error-{{ md5((string) session('error')) }}" x-data x-transition.opacity.scale.duration.200ms>
-                    <x-ui.flash variant="error">{{ session('error') }}</x-ui.flash>
-                </div>
-            @endif
-        </x-ui.flash-stack>
+        {{-- Same-page action feedback now flows through the global notification
+             outlet (x-ui.notification-hub) via $this->notify(). This inline
+             renderer only catches any post-redirect success/error banner that
+             lands on this page. --}}
+        <x-ui.session-flash />
 
         @php
             $readyChannelCount = collect($channelRows)->where('can_push', true)->count();

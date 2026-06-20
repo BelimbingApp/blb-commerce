@@ -101,7 +101,7 @@ class Show extends Component
         }
 
         if ($failures !== []) {
-            session()->flash('warning', __('Channel readiness could not be refreshed. :failures', ['failures' => implode(' ', array_slice($failures, 0, 2))]));
+            $this->notifyWarning(__('Channel readiness could not be refreshed. :failures', ['failures' => implode(' ', array_slice($failures, 0, 2))]));
         }
     }
 
@@ -125,7 +125,7 @@ class Show extends Component
         $this->item->update(['currency_code' => $validated['currency_code']]);
         $this->item->refresh();
         $this->currencyCode = (string) $this->item->currency_code;
-        session()->flash('success', __('Currency updated.'));
+        $this->notify(__('Currency updated.'));
     }
 
     public function pushChannel(string $channel, MarketplaceListingPushService $pushes): void
@@ -137,7 +137,7 @@ class Show extends Component
             ->first(fn (array $row): bool => $row['key'] === $channel && $row['can_push']);
 
         if (! $target) {
-            session()->flash('error', __('This channel is not ready to push yet. Refresh readiness and resolve the blockers first.'));
+            $this->notifyError(__('This channel is not ready to push yet. Refresh readiness and resolve the blockers first.'));
 
             return;
         }
@@ -221,24 +221,24 @@ class Show extends Component
                 ->take(2)
                 ->implode(' ');
 
-            session()->flash('warning', __('Availability sync failed on :count channel(s): :message', ['count' => $failureCount, 'message' => $message]).$skippedNote);
+            $this->notifyWarning(__('Availability sync failed on :count channel(s): :message', ['count' => $failureCount, 'message' => $message]).$skippedNote);
 
             return;
         }
 
         if ($touched === 0) {
-            session()->flash('warning', trim($skippedNote));
+            $this->notifyWarning(trim($skippedNote));
 
             return;
         }
 
         if ($result['available'] === 0) {
-            session()->flash('success', trans_choice('Out of stock — ended the listing on :count channel.|Out of stock — ended the listing on :count channels.', count($result['ended']), ['count' => count($result['ended'])]).$skippedNote);
+            $this->notify(trans_choice('Out of stock — ended the listing on :count channel.|Out of stock — ended the listing on :count channels.', count($result['ended']), ['count' => count($result['ended'])]).$skippedNote);
 
             return;
         }
 
-        session()->flash('success', trans_choice('Synced availability to :count channel.|Synced availability to :count channels.', $touched, ['count' => $touched]).$skippedNote);
+        $this->notify(trans_choice('Synced availability to :count channel.|Synced availability to :count channels.', $touched, ['count' => $touched]).$skippedNote);
     }
 
     public function uploadPhotos(InventoryItemService $items): void
@@ -272,7 +272,7 @@ class Show extends Component
         $this->refreshAllChannelReadiness();
 
         if ($uploaded > 0) {
-            session()->flash('success', trans_choice('Uploaded :count photo.|Uploaded :count photos.', $uploaded, ['count' => $uploaded]));
+            $this->notify(trans_choice('Uploaded :count photo.|Uploaded :count photos.', $uploaded, ['count' => $uploaded]));
         }
     }
 
@@ -289,7 +289,7 @@ class Show extends Component
 
         $this->item->load(self::PHOTO_RELATIONS);
         $this->refreshAllChannelReadiness();
-        session()->flash('success', __('Photo deleted.'));
+        $this->notify(__('Photo deleted.'));
     }
 
     /**
@@ -310,9 +310,9 @@ class Show extends Component
 
         try {
             $items->cleanPhoto($photo, $this->item->company_id);
-            session()->flash('success', __('Photo cleaned. Review the result before using it on a listing.'));
+            $this->notify(__('Photo cleaned. Review the result before using it on a listing.'));
         } catch (PhotoCleanupException $exception) {
-            session()->flash('error', $exception->getMessage());
+            $this->notifyError($exception->getMessage());
         }
 
         $this->item->load(self::PHOTO_RELATIONS);
@@ -350,22 +350,22 @@ class Show extends Component
         $this->item->load(self::PHOTO_RELATIONS);
 
         if ($cleaned === 0 && $failed === 0) {
-            session()->flash('success', __('All photos already have a cleaned version.'));
+            $this->notify(__('All photos already have a cleaned version.'));
 
             return;
         }
 
         if ($failed > 0) {
-            session()->flash($cleaned > 0 ? 'warning' : 'error', __(':cleaned cleaned, :failed failed: :message', [
+            $this->notify(__(':cleaned cleaned, :failed failed: :message', [
                 'cleaned' => $cleaned,
                 'failed' => $failed,
                 'message' => $errorMessage,
-            ]));
+            ]), $cleaned > 0 ? 'warning' : 'error');
 
             return;
         }
 
-        session()->flash('success', trans_choice(':count photo cleaned.|:count photos cleaned.', $cleaned, ['count' => $cleaned]));
+        $this->notify(trans_choice(':count photo cleaned.|:count photos cleaned.', $cleaned, ['count' => $cleaned]));
     }
 
     /**
@@ -399,7 +399,7 @@ class Show extends Component
         }
 
         if ($useCleanedPhoto && ! ($photo->cleanedAsset instanceof MediaAsset)) {
-            session()->flash('error', __('This photo does not have a cleaned version yet.'));
+            $this->notifyError(__('This photo does not have a cleaned version yet.'));
 
             return;
         }
@@ -408,7 +408,7 @@ class Show extends Component
 
         $this->item->load(self::PHOTO_RELATIONS);
         $this->refreshAllChannelReadiness();
-        session()->flash('success', $useCleanedPhoto ? __('Cleaned photo selected.') : __('Original photo selected.'));
+        $this->notify($useCleanedPhoto ? __('Cleaned photo selected.') : __('Original photo selected.'));
     }
 
     public function saveMoneyField(string $field, mixed $value): void
@@ -425,7 +425,7 @@ class Show extends Component
                 [$field => ['nullable', 'regex:/^\d{1,7}(\.\d{1,2})?$/']],
             )->validate();
         } catch (ValidationException $exception) {
-            session()->flash('error', __('Price was not saved. Enter a valid amount.'));
+            $this->notifyError(__('Price was not saved. Enter a valid amount.'));
 
             throw $exception;
         }
@@ -439,7 +439,7 @@ class Show extends Component
             $this->refreshAllChannelReadiness();
         }
 
-        session()->flash('success', __('Price saved.'));
+        $this->notify(__('Price saved.'));
     }
 
     /**
@@ -734,13 +734,13 @@ class Show extends Component
             ->implode(' ');
 
         if ($failureCount === 0) {
-            session()->flash('success', trans_choice('Pushed :count marketplace channel.|Pushed :count marketplace channels.', $successCount, ['count' => $successCount]));
+            $this->notify(trans_choice('Pushed :count marketplace channel.|Pushed :count marketplace channels.', $successCount, ['count' => $successCount]));
 
             return;
         }
 
         if ($successCount > 0) {
-            session()->flash('warning', __('Pushed :success channel(s), but :failed failed: :message', [
+            $this->notifyWarning(__('Pushed :success channel(s), but :failed failed: :message', [
                 'success' => $successCount,
                 'failed' => $failureCount,
                 'message' => $failureSummary,
@@ -749,6 +749,6 @@ class Show extends Component
             return;
         }
 
-        session()->flash('error', __('Nothing was pushed: :message', ['message' => $failureSummary]));
+        $this->notifyError(__('Nothing was pushed: :message', ['message' => $failureSummary]));
     }
 }
