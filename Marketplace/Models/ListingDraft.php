@@ -55,9 +55,36 @@ class ListingDraft extends Model
     protected $table = 'commerce_marketplace_listing_drafts';
 
     /**
+     * Drafts are generated readiness/cache projections. User intent belongs on
+     * the Item, Listing, or future semantic actions, not visible item history.
+     *
      * @var list<string>
      */
-    protected array $auditExclude = ['metadata_checked_at', 'readiness_snapshot'];
+    protected array $auditExclude = [
+        'id',
+        'company_id',
+        'item_id',
+        'listing_id',
+        'channel',
+        'marketplace_id',
+        'metadata_marketplace_id',
+        'external_sku',
+        'title',
+        'category_id',
+        'status',
+        'management_state',
+        'aspect_values',
+        'mapped_aspects',
+        'policy_ids',
+        'merchant_location_key',
+        'photo_asset_ids',
+        'readiness_status',
+        'readiness_snapshot',
+        'metadata_checked_at',
+        'metadata_version_key',
+        'publish_intent',
+        'last_failure_summary',
+    ];
 
     /**
      * @var list<string>
