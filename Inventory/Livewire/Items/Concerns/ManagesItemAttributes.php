@@ -55,6 +55,7 @@ trait ManagesItemAttributes
         $this->reset('selectedAttributeId', 'attributeValue');
         $this->item->load('catalogAttributeValues.attribute');
         $this->refreshAllChannelReadiness();
+        session()->flash('success', __('Attribute value saved.'));
     }
 
     public function removeAttributeValue(int $attributeValueId): void
@@ -70,6 +71,7 @@ trait ManagesItemAttributes
         $value->delete();
         $this->item->load('catalogAttributeValues.attribute');
         $this->refreshAllChannelReadiness();
+        session()->flash('success', __('Attribute value removed.'));
     }
 
     /**

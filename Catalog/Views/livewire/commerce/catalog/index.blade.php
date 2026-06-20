@@ -51,6 +51,10 @@
             <x-ui.alert variant="success">{{ session('success') }}</x-ui.alert>
         @endif
 
+        @if (session('error'))
+            <x-ui.alert variant="error">{{ session('error') }}</x-ui.alert>
+        @endif
+
         <x-ui.card>
             <div class="mb-3 flex flex-col gap-3">
                 <div class="flex justify-end text-xs text-muted">

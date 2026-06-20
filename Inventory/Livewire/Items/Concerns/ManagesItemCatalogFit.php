@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Inventory\Livewire\Items\Concerns;
 
 use App\Modules\Commerce\Catalog\Models\Category;
@@ -65,6 +66,7 @@ trait ManagesItemCatalogFit
 
             if ($template->category_id !== null && $categoryId !== null && $template->category_id !== $categoryId) {
                 $this->addError('catalogProductTemplateId', __('The selected template belongs to a different category.'));
+                session()->flash('error', __('Catalog fit was not saved. The selected template belongs to a different category.'));
 
                 return;
             }

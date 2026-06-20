@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Throwable;
@@ -124,6 +125,7 @@ class Show extends Component
         $this->item->update(['currency_code' => $validated['currency_code']]);
         $this->item->refresh();
         $this->currencyCode = (string) $this->item->currency_code;
+        session()->flash('success', __('Currency updated.'));
     }
 
     public function pushChannel(string $channel, MarketplaceListingPushService $pushes): void
@@ -248,7 +250,9 @@ class Show extends Component
             'photoFiles.*' => ['file', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
         ]);
 
-        DB::transaction(function () use ($items): void {
+        $uploaded = 0;
+
+        DB::transaction(function () use ($items, &$uploaded): void {
             $maxSort = (int) $this->item->photos()->max('sort_order');
             $sort = $maxSort;
 
@@ -259,12 +263,17 @@ class Show extends Component
 
                 $sort++;
                 $items->uploadPhoto($this->item, $file, $sort);
+                $uploaded++;
             }
         });
 
         $this->photoFiles = [];
         $this->item->load(self::PHOTO_RELATIONS);
         $this->refreshAllChannelReadiness();
+
+        if ($uploaded > 0) {
+            session()->flash('success', trans_choice('Uploaded :count photo.|Uploaded :count photos.', $uploaded, ['count' => $uploaded]));
+        }
     }
 
     public function deletePhoto(int $photoId, InventoryItemService $items): void
@@ -280,6 +289,7 @@ class Show extends Component
 
         $this->item->load(self::PHOTO_RELATIONS);
         $this->refreshAllChannelReadiness();
+        session()->flash('success', __('Photo deleted.'));
     }
 
     /**
@@ -389,6 +399,8 @@ class Show extends Component
         }
 
         if ($useCleanedPhoto && ! ($photo->cleanedAsset instanceof MediaAsset)) {
+            session()->flash('error', __('This photo does not have a cleaned version yet.'));
+
             return;
         }
 
@@ -396,6 +408,7 @@ class Show extends Component
 
         $this->item->load(self::PHOTO_RELATIONS);
         $this->refreshAllChannelReadiness();
+        session()->flash('success', $useCleanedPhoto ? __('Cleaned photo selected.') : __('Original photo selected.'));
     }
 
     public function saveMoneyField(string $field, mixed $value): void
@@ -406,10 +419,16 @@ class Show extends Component
             return;
         }
 
-        $validated = validator(
-            [$field => $value],
-            [$field => ['nullable', 'regex:/^\d{1,7}(\.\d{1,2})?$/']],
-        )->validate();
+        try {
+            $validated = validator(
+                [$field => $value],
+                [$field => ['nullable', 'regex:/^\d{1,7}(\.\d{1,2})?$/']],
+            )->validate();
+        } catch (ValidationException $exception) {
+            session()->flash('error', __('Price was not saved. Enter a valid amount.'));
+
+            throw $exception;
+        }
 
         $this->item->update([
             $field => Money::fromDecimalString($validated[$field] ?? null, $this->item->currency_code)?->minorAmount,
@@ -419,6 +438,8 @@ class Show extends Component
         if ($field === 'target_price_amount') {
             $this->refreshAllChannelReadiness();
         }
+
+        session()->flash('success', __('Price saved.'));
     }
 
     /**

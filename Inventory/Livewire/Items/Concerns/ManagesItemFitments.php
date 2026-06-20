@@ -46,6 +46,7 @@ trait ManagesItemFitments
 
         if (! $validated['fitmentUniversal'] && $this->fitmentProperties($validated) === []) {
             $this->addError('fitmentYear', __('Enter at least one compatibility value, or mark this item as universal fit.'));
+            session()->flash('error', __('Fitment was not saved. Enter compatibility values or mark it universal.'));
 
             return;
         }
@@ -55,13 +56,14 @@ trait ManagesItemFitments
         $this->fitmentFormOpen = false;
         $this->item->load('fitments');
         $this->refreshAllChannelReadiness();
+        session()->flash('success', __('Fitment added.'));
     }
 
     public function deleteFitment(int $fitmentId): void
     {
         $this->authorizeUpdate();
 
-        ItemFitment::query()
+        $deleted = ItemFitment::query()
             ->where('id', $fitmentId)
             ->where('company_id', $this->item->company_id)
             ->where('item_id', $this->item->id)
@@ -69,6 +71,10 @@ trait ManagesItemFitments
 
         $this->item->load('fitments');
         $this->refreshAllChannelReadiness();
+
+        if ($deleted > 0) {
+            session()->flash('success', __('Fitment deleted.'));
+        }
     }
 
     public function editFitment(int $fitmentId): void
@@ -112,6 +118,7 @@ trait ManagesItemFitments
 
         if (! $validated['fitmentUniversal'] && $this->fitmentProperties($validated) === []) {
             $this->addError('fitmentYear', __('Enter at least one compatibility value, or mark this item as universal fit.'));
+            session()->flash('error', __('Fitment was not saved. Enter compatibility values or mark it universal.'));
 
             return;
         }
@@ -124,6 +131,7 @@ trait ManagesItemFitments
         $this->resetFitmentForm();
         $this->item->load('fitments');
         $this->refreshAllChannelReadiness();
+        session()->flash('success', __('Fitment updated.'));
     }
 
     public function cancelFitmentEdit(): void
@@ -177,6 +185,7 @@ trait ManagesItemFitments
 
         if ($this->copyFitmentsFromItemId === null) {
             $this->addError('copyFitmentsFromItemId', __('Choose an item to copy from.'));
+            session()->flash('error', __('Choose an item to copy fitments from.'));
 
             return;
         }
@@ -189,6 +198,7 @@ trait ManagesItemFitments
 
         if (! $source instanceof Item || $source->fitments->isEmpty()) {
             $this->addError('copyFitmentsFromItemId', __('The selected item has no fitment to copy.'));
+            session()->flash('error', __('The selected item has no fitment to copy.'));
 
             return;
         }

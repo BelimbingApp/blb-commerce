@@ -326,13 +326,14 @@ function createInventoryItemPhoto(Item $item, string $bytes = 'ORIGINAL-JPEG-BYT
 
 test('runPhotoCleanup creates a background_removed derivative without switching the item to use it', function (): void {
     Storage::fake('local');
-    configurePhotoRoomSandbox();
+
+    $user = createAdminUser();
+    configurePhotoRoom(companyId: $user->company_id);
 
     Http::fake([
         'https://sdk.photoroom.com/*' => Http::response('CLEANED-PNG-BYTES', 200),
     ]);
 
-    $user = createAdminUser();
     $this->actingAs($user);
 
     $item = Item::factory()->create(['company_id' => $user->company_id]);
@@ -369,13 +370,14 @@ test('runPhotoCleanup surfaces a flash error when PhotoRoom is not configured', 
 
 test('runPhotoCleanupBatch only cleans photos without an existing derivative', function (): void {
     Storage::fake('local');
-    configurePhotoRoomSandbox();
+
+    $user = createAdminUser();
+    configurePhotoRoom(companyId: $user->company_id);
 
     Http::fake([
         'https://sdk.photoroom.com/*' => Http::response('CLEANED-PNG-BYTES', 200),
     ]);
 
-    $user = createAdminUser();
     $this->actingAs($user);
 
     $item = Item::factory()->create(['company_id' => $user->company_id]);

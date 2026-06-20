@@ -13,6 +13,7 @@ use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -201,7 +202,13 @@ class Index extends Component
             'sort_order' => ['required', 'integer', 'min:0'],
         ];
 
-        $validated = validator([$field => $value], [$field => $rules[$field]])->validate();
+        try {
+            $validated = validator([$field => $value], [$field => $rules[$field]])->validate();
+        } catch (ValidationException $exception) {
+            session()->flash('error', __('Attribute was not saved. Review the highlighted field.'));
+
+            throw $exception;
+        }
 
         $attribute->{$field} = match ($field) {
             'category_id', 'product_template_id' => $validated[$field] ?: null,
@@ -210,6 +217,7 @@ class Index extends Component
             default => $validated[$field],
         };
         $attribute->save();
+        session()->flash('success', __('Attribute saved.'));
     }
 
     public function toggleAttributeRequired(int $attributeId): void
@@ -220,6 +228,7 @@ class Index extends Component
             ->findOrFail($attributeId);
         $attribute->is_required = ! $attribute->is_required;
         $attribute->save();
+        session()->flash('success', __('Attribute requirement updated.'));
     }
 
     public function render(): View

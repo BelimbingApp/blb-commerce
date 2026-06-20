@@ -6,6 +6,7 @@ use App\Modules\Commerce\Catalog\Models\Category;
 use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 trait ManagesCatalogTemplates
 {
@@ -107,7 +108,13 @@ trait ManagesCatalogTemplates
             'description' => ['nullable', 'string', 'max:5000'],
         ];
 
-        $validated = validator([$field => $value], [$field => $rules[$field]])->validate();
+        try {
+            $validated = validator([$field => $value], [$field => $rules[$field]])->validate();
+        } catch (ValidationException $exception) {
+            session()->flash('error', __('Template was not saved. Review the highlighted field.'));
+
+            throw $exception;
+        }
 
         $template->{$field} = match ($field) {
             'category_id' => $validated[$field] ?: null,
@@ -115,6 +122,7 @@ trait ManagesCatalogTemplates
             default => $validated[$field],
         };
         $template->save();
+        session()->flash('success', __('Template saved.'));
     }
 
     public function toggleTemplateActive(int $templateId): void
@@ -125,5 +133,6 @@ trait ManagesCatalogTemplates
             ->findOrFail($templateId);
         $template->is_active = ! $template->is_active;
         $template->save();
+        session()->flash('success', __('Template status updated.'));
     }
 }

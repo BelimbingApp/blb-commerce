@@ -6,6 +6,7 @@ use App\Modules\Commerce\Catalog\Models\Category;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 trait ManagesCatalogCategories
 {
@@ -167,13 +168,20 @@ trait ManagesCatalogCategories
             'sort_order' => ['required', 'integer', 'min:0'],
         ];
 
-        $validated = validator([$field => $value], [$field => $rules[$field]])->validate();
+        try {
+            $validated = validator([$field => $value], [$field => $rules[$field]])->validate();
+        } catch (ValidationException $exception) {
+            session()->flash('error', __('Category was not saved. Review the highlighted field.'));
+
+            throw $exception;
+        }
 
         if ($field === 'parent_id') {
             $parentId = $validated[$field] ? (int) $validated[$field] : null;
 
             if ($parentId === $category->id) {
                 $this->addError('categoryParentId', __('A category cannot be its own parent.'));
+                session()->flash('error', __('Category was not saved. A category cannot be its own parent.'));
 
                 return;
             }
@@ -184,6 +192,7 @@ trait ManagesCatalogCategories
 
             if ($parent instanceof Category && $parent->isDescendantOf($category)) {
                 $this->addError('categoryParentId', __('A category cannot be moved under one of its sub-categories.'));
+                session()->flash('error', __('Category was not saved. A category cannot be moved under one of its sub-categories.'));
 
                 return;
             }
@@ -195,6 +204,7 @@ trait ManagesCatalogCategories
             default => $validated[$field],
         };
         $category->save();
+        session()->flash('success', __('Category saved.'));
     }
 
     /**
