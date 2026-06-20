@@ -596,9 +596,9 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                             @endif
                                             @if ($row['listed'] && $listing?->listing_url)
                                                 {{-- The state pill doubles as the way to the live listing. --}}
-                                                <a href="{{ $listing->listing_url }}" target="_blank" rel="noreferrer" title="{{ __('Open the live listing') }}">
+                                                <x-ui.link kind="external" href="{{ $listing->listing_url }}" :icon="false" :title="__('Open the live listing')">
                                                     <x-ui.badge :variant="$stateVariant">{{ __($stateLabel) }} ↗</x-ui.badge>
-                                                </a>
+                                                </x-ui.link>
                                             @else
                                                 <x-ui.badge :variant="$stateVariant">{{ __($stateLabel) }}</x-ui.badge>
                                             @endif

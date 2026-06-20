@@ -83,9 +83,9 @@ $ebaySettingsTabs = [
                                                                 @if (is_array($step))
                                                                     <li>
                                                                         {{ __($step['before_link'] ?? '') }}
-                                                                        <a href="{{ $step['url'] }}" target="_blank" rel="noreferrer" class="text-accent hover:underline">
+                                                                        <x-ui.link kind="external" href="{{ $step['url'] }}">
                                                                             {{ __($step['link_label']) }}
-                                                                        </a>
+                                                                        </x-ui.link>
                                                                         {!! __($step['after_link'] ?? '') !!}
                                                                     </li>
                                                                 @else

@@ -137,9 +137,9 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                                     <div class="font-mono text-xs text-muted">{{ $listing->external_sku ?? __('No SKU') }}</div>
                                     <div class="mt-1 text-sm font-medium text-ink">
                                         @if ($listing->listing_url)
-                                            <a href="{{ $listing->listing_url }}" target="_blank" rel="noreferrer" class="text-accent hover:underline">
+                                            <x-ui.link kind="external" href="{{ $listing->listing_url }}">
                                                 {{ $listing->title ?? $listing->external_listing_id }}
-                                            </a>
+                                            </x-ui.link>
                                         @else
                                             {{ $listing->title ?? $listing->external_listing_id ?? $listing->external_offer_id ?? __('Unpublished offer') }}
                                         @endif
