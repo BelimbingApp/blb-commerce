@@ -46,7 +46,7 @@ trait ManagesItemFitments
 
         if (! $validated['fitmentUniversal'] && $this->fitmentProperties($validated) === []) {
             $this->addError('fitmentYear', __('Enter at least one compatibility value, or mark this item as universal fit.'));
-            session()->flash('error', __('Fitment was not saved. Enter compatibility values or mark it universal.'));
+            $this->notifyError(__('Fitment was not saved. Enter compatibility values or mark it universal.'));
 
             return;
         }
@@ -56,7 +56,7 @@ trait ManagesItemFitments
         $this->fitmentFormOpen = false;
         $this->item->load('fitments');
         $this->refreshAllChannelReadiness();
-        session()->flash('success', __('Fitment added.'));
+        $this->notify(__('Fitment added.'));
     }
 
     public function deleteFitment(int $fitmentId): void
@@ -73,7 +73,7 @@ trait ManagesItemFitments
         $this->refreshAllChannelReadiness();
 
         if ($deleted > 0) {
-            session()->flash('success', __('Fitment deleted.'));
+            $this->notify(__('Fitment deleted.'));
         }
     }
 
@@ -118,7 +118,7 @@ trait ManagesItemFitments
 
         if (! $validated['fitmentUniversal'] && $this->fitmentProperties($validated) === []) {
             $this->addError('fitmentYear', __('Enter at least one compatibility value, or mark this item as universal fit.'));
-            session()->flash('error', __('Fitment was not saved. Enter compatibility values or mark it universal.'));
+            $this->notifyError(__('Fitment was not saved. Enter compatibility values or mark it universal.'));
 
             return;
         }
@@ -131,7 +131,7 @@ trait ManagesItemFitments
         $this->resetFitmentForm();
         $this->item->load('fitments');
         $this->refreshAllChannelReadiness();
-        session()->flash('success', __('Fitment updated.'));
+        $this->notify(__('Fitment updated.'));
     }
 
     public function cancelFitmentEdit(): void
@@ -159,7 +159,7 @@ trait ManagesItemFitments
         }
 
         if ($properties === []) {
-            session()->flash('error', __('No configured fitment attributes have values on this item.'));
+            $this->notifyError(__('No configured fitment attributes have values on this item.'));
 
             return;
         }
@@ -176,7 +176,7 @@ trait ManagesItemFitments
 
         $this->item->load('fitments');
         $this->refreshAllChannelReadiness();
-        session()->flash('success', __('Created fitment from item attributes.'));
+        $this->notify(__('Created fitment from item attributes.'));
     }
 
     public function copyFitmentsFromItem(): void
@@ -185,7 +185,7 @@ trait ManagesItemFitments
 
         if ($this->copyFitmentsFromItemId === null) {
             $this->addError('copyFitmentsFromItemId', __('Choose an item to copy from.'));
-            session()->flash('error', __('Choose an item to copy fitments from.'));
+            $this->notifyError(__('Choose an item to copy fitments from.'));
 
             return;
         }
@@ -198,7 +198,7 @@ trait ManagesItemFitments
 
         if (! $source instanceof Item || $source->fitments->isEmpty()) {
             $this->addError('copyFitmentsFromItemId', __('The selected item has no fitment to copy.'));
-            session()->flash('error', __('The selected item has no fitment to copy.'));
+            $this->notifyError(__('The selected item has no fitment to copy.'));
 
             return;
         }
@@ -230,7 +230,7 @@ trait ManagesItemFitments
         $this->copyFitmentsFromItemId = null;
         $this->item->load('fitments');
         $this->refreshAllChannelReadiness();
-        session()->flash('success', trans_choice('Copied :count fitment entry.|Copied :count fitment entries.', $copied, ['count' => $copied]));
+        $this->notify(trans_choice('Copied :count fitment entry.|Copied :count fitment entries.', $copied, ['count' => $copied]));
     }
 
     /**

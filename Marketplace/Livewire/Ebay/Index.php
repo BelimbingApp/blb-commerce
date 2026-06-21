@@ -4,6 +4,7 @@ namespace App\Modules\Commerce\Marketplace\Livewire\Ebay;
 
 use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\ValueObjects\Money;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
@@ -24,6 +25,7 @@ use Throwable;
 
 class Index extends Component
 {
+    use InteractsWithNotifications;
     use WithPagination;
 
     public string $search = '';
@@ -85,7 +87,7 @@ class Index extends Component
         $listing = $this->managedListing($listingId);
 
         if ($listing === null || $listing->item === null) {
-            session()->flash('error', __('Link this listing to a Belimbing item before editing it here.'));
+            $this->notifyError(__('Link this listing to a Belimbing item before editing it here.'));
 
             return;
         }
@@ -105,7 +107,7 @@ class Index extends Component
         $listing = $this->modalListingId !== null ? $this->managedListing($this->modalListingId) : null;
 
         if ($listing === null || $listing->item === null) {
-            session()->flash('error', __('This listing can no longer be edited here.'));
+            $this->notifyError(__('This listing can no longer be edited here.'));
             $this->closeListingModal();
 
             return;
@@ -127,12 +129,12 @@ class Index extends Component
 
         if ($result['failures'] !== []) {
             $message = collect($result['failures'])->map(fn (array $f): string => $f['label'].': '.$f['message'])->first();
-            session()->flash('error', __('Saved, but the push failed: :message', ['message' => $message]));
+            $this->notifyError(__('Saved, but the push failed: :message', ['message' => $message]));
 
             return;
         }
 
-        session()->flash('success', __('Saved and pushed to :channel.', ['channel' => $listing->channel]));
+        $this->notify(__('Saved and pushed to :channel.', ['channel' => $listing->channel]));
     }
 
     public function closeListingModal(): void
@@ -174,7 +176,7 @@ class Index extends Component
             $listings = $channel->pullListings($companyId);
             $orders = $channel->pullOrders($companyId);
         } catch (Throwable $exception) {
-            session()->flash('error', $exception->getMessage());
+            $this->notifyError($exception->getMessage());
 
             return;
         }
@@ -198,7 +200,7 @@ class Index extends Component
             $reconcileNote = ' '.__('Listing mirror skipped: :message', ['message' => $exception->getMessage()]);
         }
 
-        session()->flash('success', __(
+        $this->notify(__(
             'Pulled from eBay — :listingsFetched listings (:listingsCreated new, :listingsUpdated updated) and :ordersFetched orders (:ordersCreated new).',
             [
                 'listingsFetched' => $listings->fetched,
@@ -240,7 +242,7 @@ class Index extends Component
         try {
             $this->sellerListings = $channel->fetchSellerListings($this->companyId());
         } catch (Throwable $exception) {
-            session()->flash('error', $exception->getMessage());
+            $this->notifyError($exception->getMessage());
 
             return;
         }
@@ -249,7 +251,7 @@ class Index extends Component
         $this->listingsLoaded = true;
 
         if ($this->sellerListings === []) {
-            session()->flash('warning', __('No active eBay listings were found for this account.'));
+            $this->notifyWarning(__('No active eBay listings were found for this account.'));
         }
     }
 
@@ -284,14 +286,14 @@ class Index extends Component
         try {
             $result = $channel->importSellerListings($this->companyId(), $listingIds);
         } catch (Throwable $exception) {
-            session()->flash('error', $exception->getMessage());
+            $this->notifyError($exception->getMessage());
 
             return;
         }
 
         $this->closeImportModal();
 
-        session()->flash('success', __(
+        $this->notify(__(
             'Imported :fetched eBay listing(s) — :created new, :updated updated, :linked linked to inventory items.',
             [
                 'fetched' => $result->fetched,
@@ -318,7 +320,7 @@ class Index extends Component
             ->first();
 
         if ($listing === null) {
-            session()->flash('error', __('That listing is already linked or no longer available.'));
+            $this->notifyError(__('That listing is already linked or no longer available.'));
 
             return;
         }
@@ -326,12 +328,12 @@ class Index extends Component
         try {
             $item = $adoptions->adopt($listing);
         } catch (Throwable $exception) {
-            session()->flash('error', __('Adoption failed: :message', ['message' => $exception->getMessage()]));
+            $this->notifyError(__('Adoption failed: :message', ['message' => $exception->getMessage()]));
 
             return;
         }
 
-        session()->flash('success', __('Created inventory item :sku from the listing.', ['sku' => $item->sku]));
+        $this->notify(__('Created inventory item :sku from the listing.', ['sku' => $item->sku]));
     }
 
     /**
@@ -352,14 +354,14 @@ class Index extends Component
             ->all();
 
         if ($listingIds === []) {
-            session()->flash('warning', __('No unlinked active listings to adopt.'));
+            $this->notifyWarning(__('No unlinked active listings to adopt.'));
 
             return;
         }
 
         AdoptListingsJob::dispatch($this->companyId(), $listingIds);
 
-        session()->flash('success', __('Queued :count listing(s) for adoption — items appear as each finishes.', ['count' => count($listingIds)]));
+        $this->notify(__('Queued :count listing(s) for adoption — items appear as each finishes.', ['count' => count($listingIds)]));
     }
 
     public function render(EbayConfiguration $configuration, EbayOAuthService $oauth): View

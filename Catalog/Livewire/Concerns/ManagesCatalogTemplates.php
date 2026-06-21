@@ -86,7 +86,7 @@ trait ManagesCatalogTemplates
         $this->reset('templateCategoryId', 'templateName', 'templateCode', 'templateDescription');
         $this->createKind = '';
         $this->showCreateModal = false;
-        session()->flash('success', __('Template created.'));
+        $this->notify(__('Template created.'));
     }
 
     public function saveTemplateField(int $templateId, string $field, mixed $value): void
@@ -111,7 +111,7 @@ trait ManagesCatalogTemplates
         try {
             $validated = validator([$field => $value], [$field => $rules[$field]])->validate();
         } catch (ValidationException $exception) {
-            session()->flash('error', __('Template was not saved. Review the highlighted field.'));
+            $this->notifyError(__('Template was not saved. Review the highlighted field.'));
 
             throw $exception;
         }
@@ -122,7 +122,7 @@ trait ManagesCatalogTemplates
             default => $validated[$field],
         };
         $template->save();
-        session()->flash('success', __('Template saved.'));
+        $this->notify(__('Template saved.'));
     }
 
     public function toggleTemplateActive(int $templateId): void
@@ -133,6 +133,6 @@ trait ManagesCatalogTemplates
             ->findOrFail($templateId);
         $template->is_active = ! $template->is_active;
         $template->save();
-        session()->flash('success', __('Template status updated.'));
+        $this->notify(__('Template status updated.'));
     }
 }

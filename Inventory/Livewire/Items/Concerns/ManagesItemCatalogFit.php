@@ -66,7 +66,7 @@ trait ManagesItemCatalogFit
 
             if ($template->category_id !== null && $categoryId !== null && $template->category_id !== $categoryId) {
                 $this->addError('catalogProductTemplateId', __('The selected template belongs to a different category.'));
-                session()->flash('error', __('Catalog fit was not saved. The selected template belongs to a different category.'));
+                $this->notifyError(__('Catalog fit was not saved. The selected template belongs to a different category.'));
 
                 return;
             }
@@ -87,7 +87,7 @@ trait ManagesItemCatalogFit
 
         $this->refreshAllChannelReadiness();
 
-        session()->flash('success', __('Catalog fit updated.'));
+        $this->notify(__('Catalog fit updated.'));
     }
 
     private function selectedProductTemplate(): ?ProductTemplate

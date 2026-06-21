@@ -160,7 +160,7 @@ class Settings extends SettingsForm
 
             return redirect()->away($oauth->authorizationUrl($this->companyId()));
         } catch (Throwable $exception) {
-            session()->flash('error', $exception->getMessage());
+            $this->notifyError($exception->getMessage());
 
             return null;
         }
@@ -176,9 +176,9 @@ class Settings extends SettingsForm
         try {
             $result = $importer->import($this->companyId());
 
-            session()->flash('success', __('Imported :count eBay setup choices.', ['count' => $result->total()]));
+            $this->notify(__('Imported :count eBay setup choices.', ['count' => $result->total()]));
         } catch (Throwable $exception) {
-            session()->flash('error', $exception->getMessage());
+            $this->notifyError($exception->getMessage());
         }
     }
 
@@ -196,7 +196,7 @@ class Settings extends SettingsForm
         $settings->set('commerce.marketplace.ebay.default_return_policy_id', $this->nullableDefault($this->defaultReturnPolicyId), $scope);
         $settings->set('commerce.marketplace.ebay.default_merchant_location_key', $this->nullableDefault($this->defaultMerchantLocationKey), $scope);
 
-        session()->flash('success', __('eBay setup defaults saved.'));
+        $this->notify(__('eBay setup defaults saved.'));
     }
 
     /**
@@ -466,7 +466,7 @@ class Settings extends SettingsForm
             try {
                 $categoryTreeId = $metadataService->defaultCategoryTreeId($this->companyId(), $marketplaceId);
             } catch (Throwable) {
-                session()->flash('warning', __('Mapping saved, but the eBay category tree could not be resolved for “:template”. Check the eBay connection.', ['template' => $template->name]));
+                $this->notifyWarning(__('Mapping saved, but the eBay category tree could not be resolved for “:template”. Check the eBay connection.', ['template' => $template->name]));
             }
         }
 
@@ -493,7 +493,7 @@ class Settings extends SettingsForm
                 $metadataService->automotivePartsCompatibilityPolicies($companyId, $marketplaceId, [$categoryId], forceRefresh: true);
                 $metadataService->itemConditionPolicies($companyId, $marketplaceId, [$categoryId], forceRefresh: true);
             } catch (Throwable $exception) {
-                session()->flash('warning', __('“:template” mapping saved, but eBay category rules could not be fetched yet: :message', ['template' => $template->name, 'message' => $exception->getMessage()]));
+                $this->notifyWarning(__('“:template” mapping saved, but eBay category rules could not be fetched yet: :message', ['template' => $template->name, 'message' => $exception->getMessage()]));
             }
         }
 

@@ -145,7 +145,7 @@ trait ManagesCatalogCategories
         $this->reset('categoryParentId', 'categoryName', 'categoryCode', 'categoryDescription');
         $this->createKind = '';
         $this->showCreateModal = false;
-        session()->flash('success', __('Category created.'));
+        $this->notify(__('Category created.'));
     }
 
     public function saveCategoryField(int $categoryId, string $field, mixed $value): void
@@ -171,7 +171,7 @@ trait ManagesCatalogCategories
         try {
             $validated = validator([$field => $value], [$field => $rules[$field]])->validate();
         } catch (ValidationException $exception) {
-            session()->flash('error', __('Category was not saved. Review the highlighted field.'));
+            $this->notifyError(__('Category was not saved. Review the highlighted field.'));
 
             throw $exception;
         }
@@ -181,7 +181,7 @@ trait ManagesCatalogCategories
 
             if ($parentId === $category->id) {
                 $this->addError('categoryParentId', __('A category cannot be its own parent.'));
-                session()->flash('error', __('Category was not saved. A category cannot be its own parent.'));
+                $this->notifyError(__('Category was not saved. A category cannot be its own parent.'));
 
                 return;
             }
@@ -192,7 +192,7 @@ trait ManagesCatalogCategories
 
             if ($parent instanceof Category && $parent->isDescendantOf($category)) {
                 $this->addError('categoryParentId', __('A category cannot be moved under one of its sub-categories.'));
-                session()->flash('error', __('Category was not saved. A category cannot be moved under one of its sub-categories.'));
+                $this->notifyError(__('Category was not saved. A category cannot be moved under one of its sub-categories.'));
 
                 return;
             }
@@ -204,7 +204,7 @@ trait ManagesCatalogCategories
             default => $validated[$field],
         };
         $category->save();
-        session()->flash('success', __('Category saved.'));
+        $this->notify(__('Category saved.'));
     }
 
     /**

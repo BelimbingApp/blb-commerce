@@ -2,6 +2,7 @@
 
 namespace App\Modules\Commerce\Catalog\Livewire;
 
+use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\Livewire\Concerns\ResetsPaginationOnSearch;
 use App\Base\Foundation\Livewire\Concerns\TogglesSort;
 use App\Modules\Commerce\Catalog\Livewire\Concerns\InteractsWithCatalogWorkbenchData;
@@ -20,6 +21,7 @@ use Livewire\WithPagination;
 class Index extends Component
 {
     use InteractsWithCatalogWorkbenchData;
+    use InteractsWithNotifications;
     use ManagesCatalogCategories;
     use ManagesCatalogTemplates;
     use ResetsPaginationOnSearch;
@@ -177,7 +179,7 @@ class Index extends Component
         $this->attributeType = Attribute::TYPE_TEXT;
         $this->createKind = '';
         $this->showCreateModal = false;
-        session()->flash('success', __('Attribute created.'));
+        $this->notify(__('Attribute created.'));
     }
 
     public function saveAttributeField(int $attributeId, string $field, mixed $value): void
@@ -205,7 +207,7 @@ class Index extends Component
         try {
             $validated = validator([$field => $value], [$field => $rules[$field]])->validate();
         } catch (ValidationException $exception) {
-            session()->flash('error', __('Attribute was not saved. Review the highlighted field.'));
+            $this->notifyError(__('Attribute was not saved. Review the highlighted field.'));
 
             throw $exception;
         }
@@ -217,7 +219,7 @@ class Index extends Component
             default => $validated[$field],
         };
         $attribute->save();
-        session()->flash('success', __('Attribute saved.'));
+        $this->notify(__('Attribute saved.'));
     }
 
     public function toggleAttributeRequired(int $attributeId): void
@@ -228,7 +230,7 @@ class Index extends Component
             ->findOrFail($attributeId);
         $attribute->is_required = ! $attribute->is_required;
         $attribute->save();
-        session()->flash('success', __('Attribute requirement updated.'));
+        $this->notify(__('Attribute requirement updated.'));
     }
 
     public function render(): View
