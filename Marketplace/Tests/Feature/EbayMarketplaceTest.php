@@ -552,7 +552,7 @@ test('ebay marketplace pull from eBay fetches listings and orders in one action'
         ->test(MarketplaceIndex::class)
         ->call('pullFromEbay')
         ->assertHasNoErrors()
-        ->assertSee('Pulled from eBay');
+        ->assertDispatched('notify', fn ($event, $params) => str_contains((string) ($params['message'] ?? ''), 'Pulled from eBay'));
 
     // One operator action covers the store: Inventory listings, the live active-set
     // mirror (Trading API), and orders.
