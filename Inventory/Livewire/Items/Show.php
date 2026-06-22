@@ -52,7 +52,7 @@ class Show extends Component
      *
      * @var list<string>
      */
-    private const PHOTO_RELATIONS = ['photos.mediaAsset', 'photos.cleanedAsset'];
+    private const PHOTO_RELATIONS = ['photos.mediaAsset', 'photos.cleanedAsset', 'photos.cleanedAssets', 'photos.selectedCleanedAsset'];
 
     /**
      * @var array<int, mixed>
@@ -319,8 +319,8 @@ class Show extends Component
         $this->item->loadMissing(self::PHOTO_RELATIONS);
 
         $photo = $this->item->photos
-            ->first(fn (ItemPhoto $photo): bool => $photo->cleanedAsset instanceof MediaAsset && ! $photo->use_cleaned_photo)
-            ?? $this->item->photos->first(fn (ItemPhoto $photo): bool => $photo->cleanedAsset instanceof MediaAsset);
+            ->first(fn (ItemPhoto $photo): bool => $photo->cleanedAssets->isNotEmpty() && ! $photo->use_cleaned_photo)
+            ?? $this->item->photos->first(fn (ItemPhoto $photo): bool => $photo->cleanedAssets->isNotEmpty());
 
         if ($photo instanceof ItemPhoto) {
             $this->photoReviewPhotoId = $photo->id;
@@ -385,6 +385,8 @@ class Show extends Component
             return;
         }
 
+        $this->ensureReadyPhotoCleanupProviderSelected();
+
         try {
             $items->cleanPhoto($photo, $this->item->company_id);
             $this->photoReviewPhotoId = $photo->id;
@@ -399,8 +401,8 @@ class Show extends Component
 
     /**
      * Run background removal on every photo that does not already have a
-     * cleaned derivative. Already-cleaned photos are left as-is — use
-     * runPhotoCleanup to retry an individual photo.
+     * derivative from the active provider. Other providers' derivatives are
+     * left available for comparison.
      */
     public function runPhotoCleanupBatch(InventoryItemService $items): void
     {
@@ -412,8 +414,11 @@ class Show extends Component
         $failed = 0;
         $errorMessage = null;
 
+        $activeProvider = $this->ensureReadyPhotoCleanupProviderSelected();
+        $providerKey = $activeProvider['key'] ?? app(PhotoCleanupSelection::class)->activeProviderKey($this->item->company_id);
+
         foreach ($this->item->photos as $photo) {
-            if ($photo->cleanedAsset instanceof MediaAsset) {
+            if ($photo->cleanedAssetForProvider($providerKey) instanceof MediaAsset) {
                 continue;
             }
 
@@ -429,7 +434,9 @@ class Show extends Component
         $this->item->load(self::PHOTO_RELATIONS);
 
         if ($cleaned === 0 && $failed === 0) {
-            $this->notify(__('All photos already have a cleaned version.'));
+            $this->notify($activeProvider
+                ? __('All photos already have a :provider version.', ['provider' => $activeProvider['label']])
+                : __('All photos already have a cleaned version.'));
 
             return;
         }
@@ -451,9 +458,9 @@ class Show extends Component
      * Switch this photo to use its cleaned derivative for marketplace
      * listings. Reversible via revertCleanedPhoto.
      */
-    public function acceptCleanedPhoto(int $photoId, InventoryItemService $items): void
+    public function acceptCleanedPhoto(int $photoId, ?int $cleanedAssetId = null): void
     {
-        $this->applyUseCleanedPhoto($photoId, true, $items);
+        $this->applyUseCleanedPhoto($photoId, true, app(InventoryItemService::class), $cleanedAssetId);
     }
 
     /**
@@ -466,7 +473,7 @@ class Show extends Component
         $this->applyUseCleanedPhoto($photoId, false, $items);
     }
 
-    private function applyUseCleanedPhoto(int $photoId, bool $useCleanedPhoto, InventoryItemService $items): void
+    private function applyUseCleanedPhoto(int $photoId, bool $useCleanedPhoto, InventoryItemService $items, ?int $cleanedAssetId = null): void
     {
         $this->authorizeUpdate();
 
@@ -477,13 +484,21 @@ class Show extends Component
             return;
         }
 
-        if ($useCleanedPhoto && ! ($photo->cleanedAsset instanceof MediaAsset)) {
+        $cleanedAsset = null;
+
+        if ($useCleanedPhoto) {
+            $cleanedAsset = $cleanedAssetId !== null
+                ? $photo->cleanedAssets->firstWhere('id', $cleanedAssetId)
+                : $photo->activeCleanedAsset();
+        }
+
+        if ($useCleanedPhoto && ! ($cleanedAsset instanceof MediaAsset)) {
             $this->notifyError(__('This photo does not have a cleaned version yet.'));
 
             return;
         }
 
-        $items->setUseCleanedPhoto($photo, $useCleanedPhoto);
+        $items->setUseCleanedPhoto($photo, $useCleanedPhoto, $cleanedAsset);
 
         $this->item->load(self::PHOTO_RELATIONS);
         $this->refreshAllChannelReadiness();
@@ -634,6 +649,10 @@ class Show extends Component
 
     public function render(): View
     {
+        $photoCleanupProviders = $this->readyPhotoCleanupProviders();
+        $activePhotoCleanupProviderKey = data_get(collect($photoCleanupProviders)->firstWhere('active', true), 'key')
+            ?? app(PhotoCleanupSelection::class)->activeProviderKey($this->item->company_id);
+
         return view('commerce-inventory::livewire.commerce.inventory.items.show', [
             'statuses' => Item::statuses(),
             'availableAttributes' => $this->applicableAttributeQuery(Auth::user()?->company_id)->get(),
@@ -661,7 +680,8 @@ class Show extends Component
             'extensionReadinessPanels' => app(CommercePluginRegistry::class)->itemReadinessPanels($this->item),
             'photoReviewPhoto' => $this->photoReviewModalOpen ? $this->photoReviewPhoto() : null,
             'photoReviewPosition' => $this->photoReviewPosition(),
-            'photoCleanupProviders' => $this->readyPhotoCleanupProviders(),
+            'photoCleanupProviders' => $photoCleanupProviders,
+            'activePhotoCleanupProviderKey' => $activePhotoCleanupProviderKey,
         ]);
     }
 
@@ -860,7 +880,7 @@ class Show extends Component
             ->family('image')
             ?->providers($this->item->company_id) ?? [];
 
-        return collect($providers)
+        $readyProviders = collect($providers)
             ->filter(fn ($provider): bool => $provider->connected)
             ->map(fn ($provider): array => [
                 'key' => $provider->providerKey,
@@ -869,6 +889,30 @@ class Show extends Component
             ])
             ->values()
             ->all();
+
+        if ($readyProviders !== [] && ! collect($readyProviders)->contains(fn (array $provider): bool => $provider['active'])) {
+            $readyProviders[0]['active'] = true;
+        }
+
+        return $readyProviders;
+    }
+
+    /**
+     * @return array{key: string, label: string, active: bool}|null
+     */
+    private function ensureReadyPhotoCleanupProviderSelected(): ?array
+    {
+        $provider = collect($this->readyPhotoCleanupProviders())->firstWhere('active', true);
+
+        if (! is_array($provider)) {
+            return null;
+        }
+
+        if ($provider['key'] !== app(PhotoCleanupSelection::class)->activeProviderKey($this->item->company_id)) {
+            app(PhotoCleanupSelection::class)->setActiveProvider($this->item->company_id, $provider['key']);
+        }
+
+        return $provider;
     }
 
     /**

@@ -85,8 +85,11 @@ class InventoryItemService
      * marketplace listings. Reversible: toggling does not delete either
      * asset.
      */
-    public function setUseCleanedPhoto(ItemPhoto $photo, bool $useCleanedPhoto): void
+    public function setUseCleanedPhoto(ItemPhoto $photo, bool $useCleanedPhoto, ?MediaAsset $cleanedAsset = null): void
     {
-        $photo->update(['use_cleaned_photo' => $useCleanedPhoto]);
+        $photo->update([
+            'use_cleaned_photo' => $useCleanedPhoto,
+            'selected_cleaned_asset_id' => $cleanedAsset?->id ?? $photo->selected_cleaned_asset_id,
+        ]);
     }
 }

@@ -46,7 +46,7 @@ class EbayPictureService
      */
     public function ensureHostedPhotos(Item $item): array
     {
-        $item->loadMissing('photos.mediaAsset', 'photos.cleanedAsset');
+        $item->loadMissing('photos.mediaAsset', 'photos.cleanedAsset', 'photos.selectedCleanedAsset');
 
         $config = null;
         $accessToken = null;

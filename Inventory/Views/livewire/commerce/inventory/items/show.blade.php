@@ -785,10 +785,10 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
 
                         @php
                             $cleanedPhotoCount = $item->photos
-                                ->filter(fn (ItemPhoto $photo): bool => $photo->cleanedAsset instanceof MediaAsset)
+                                ->filter(fn (ItemPhoto $photo): bool => $photo->cleanedAssets->isNotEmpty())
                                 ->count();
                             $unreviewedCleanedPhotoCount = $item->photos
-                                ->filter(fn (ItemPhoto $photo): bool => $photo->cleanedAsset instanceof MediaAsset && ! $photo->use_cleaned_photo)
+                                ->filter(fn (ItemPhoto $photo): bool => $photo->cleanedAssets->isNotEmpty() && ! $photo->use_cleaned_photo)
                                 ->count();
                         @endphp
 
@@ -820,7 +820,7 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
                                         wire:click="runPhotoCleanupBatch"
                                         wire:loading.attr="disabled"
                                         wire:target="runPhotoCleanupBatch"
-                                        title="{{ __('Remove the background from every photo that does not already have a cleaned version.') }}"
+                                        title="{{ __('Remove the background from every photo that does not already have a version from the active provider.') }}"
                                     >
                                         <x-icon name="heroicon-o-sparkles" class="h-4 w-4" />
                                         {{ __('Clean photos') }}
@@ -837,7 +837,12 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
                             @foreach ($item->photos as $photo)
                                 @php
                                     $displayAsset = $photo->displayAsset();
-                                    $cleanedAsset = $photo->cleanedAsset;
+                                    $cleanedAssets = $photo->cleanedAssets;
+                                    $cleanedAsset = $photo->activeCleanedAsset() ?? $cleanedAssets->first();
+                                    $cleanProvider = $cleanedAsset instanceof MediaAsset
+                                        ? (data_get($cleanedAsset->metadata, 'provider_label')
+                                            ?: \Illuminate\Support\Str::headline((string) data_get($cleanedAsset->metadata, 'provider', __('cleanup provider'))))
+                                        : null;
                                     $filename = $displayAsset?->original_filename ?? '';
                                 @endphp
                                 <div wire:key="item-photo-{{ $photo->id }}" class="overflow-hidden rounded-2xl border border-border-default bg-surface-subtle">
@@ -861,9 +866,9 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
                                             </button>
                                         @endif
 
-                                        @if ($cleanedAsset)
+                                        @if ($cleanedAssets->isNotEmpty())
                                             <x-ui.badge :variant="$photo->use_cleaned_photo ? 'success' : 'default'" class="absolute left-2 top-2">
-                                                {{ $photo->use_cleaned_photo ? __('Cleaned') : __('Original') }}
+                                                {{ $photo->use_cleaned_photo && $cleanProvider ? $cleanProvider : __('Original') }}
                                             </x-ui.badge>
                                         @endif
 
@@ -886,8 +891,6 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
                                             @if ($cleanedAsset)
                                                 @php
                                                     $cleanedAt = data_get($cleanedAsset->metadata, 'cleaned_at');
-                                                    $cleanProvider = data_get($cleanedAsset->metadata, 'provider_label')
-                                                        ?: \Illuminate\Support\Str::headline((string) data_get($cleanedAsset->metadata, 'provider', __('cleanup provider')));
                                                 @endphp
                                                 <p class="text-[11px] text-muted">
                                                     {{ __('Cleaned :time via :provider', [
@@ -903,23 +906,18 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
                                                     {{ __('Review') }}
                                                 </x-ui.button>
 
-                                                @if ($cleanedAsset)
+                                                @if ($cleanedAsset instanceof MediaAsset)
                                                     @if ($photo->use_cleaned_photo)
                                                         <x-ui.button type="button" variant="outline" size="sm" wire:click="revertCleanedPhoto({{ $photo->id }})" wire:loading.attr="disabled" wire:target="revertCleanedPhoto({{ $photo->id }}),runPhotoCleanupBatch">
                                                             <x-icon name="heroicon-o-arrow-uturn-left" class="h-3.5 w-3.5" />
                                                             {{ __('Use original') }}
                                                         </x-ui.button>
                                                     @else
-                                                        <x-ui.button type="button" variant="outline" size="sm" wire:click="acceptCleanedPhoto({{ $photo->id }})" wire:loading.attr="disabled" wire:target="acceptCleanedPhoto({{ $photo->id }}),runPhotoCleanupBatch">
+                                                        <x-ui.button type="button" variant="outline" size="sm" wire:click="acceptCleanedPhoto({{ $photo->id }}, {{ $cleanedAsset->id }})" wire:loading.attr="disabled" wire:target="acceptCleanedPhoto({{ $photo->id }}),runPhotoCleanupBatch">
                                                             <x-icon name="heroicon-o-check" class="h-3.5 w-3.5" />
-                                                            {{ __('Use cleaned') }}
+                                                            {{ $cleanProvider ? __('Use :provider', ['provider' => $cleanProvider]) : __('Use cleaned') }}
                                                         </x-ui.button>
                                                     @endif
-
-                                                    <x-ui.button type="button" variant="ghost" size="sm" wire:click="runPhotoCleanup({{ $photo->id }})" wire:loading.attr="disabled" wire:target="runPhotoCleanup({{ $photo->id }}),runPhotoCleanupBatch">
-                                                        <x-icon name="heroicon-o-arrow-path" class="h-3.5 w-3.5" />
-                                                        {{ __('Retry') }}
-                                                    </x-ui.button>
                                                 @else
                                                     <x-ui.button type="button" variant="outline" size="sm" wire:click="runPhotoCleanup({{ $photo->id }})" wire:loading.attr="disabled" wire:target="runPhotoCleanup({{ $photo->id }}),runPhotoCleanupBatch">
                                                         <x-icon name="heroicon-o-sparkles" class="h-3.5 w-3.5" />
@@ -1057,18 +1055,25 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
     @if ($photoReviewPhoto instanceof ItemPhoto)
         @php
             $reviewOriginalAsset = $photoReviewPhoto->mediaAsset;
-            $reviewCleanedAsset = $photoReviewPhoto->cleanedAsset;
+            $reviewCleanedAssets = $photoReviewPhoto->cleanedAssets;
             $reviewFilename = $reviewOriginalAsset?->original_filename ?? __('Photo');
+            $activeCleanupProvider = collect($photoCleanupProviders)->firstWhere('active', true);
+            $activeCleanupProviderLabel = data_get($activeCleanupProvider, 'label');
+            $activeProviderCleanedAsset = is_string($activePhotoCleanupProviderKey)
+                ? $photoReviewPhoto->cleanedAssetForProvider($activePhotoCleanupProviderKey)
+                : null;
+            $selectedCleanedAsset = $photoReviewPhoto->use_cleaned_photo ? $photoReviewPhoto->activeCleanedAsset() : null;
+            $reviewCleanedAsset = $selectedCleanedAsset ?? $activeProviderCleanedAsset ?? $reviewCleanedAssets->first();
             $reviewCleanedAt = $reviewCleanedAsset ? data_get($reviewCleanedAsset->metadata, 'cleaned_at') : null;
             $reviewCleanProvider = $reviewCleanedAsset
                 ? (data_get($reviewCleanedAsset->metadata, 'provider_label')
                     ?: \Illuminate\Support\Str::headline((string) data_get($reviewCleanedAsset->metadata, 'provider', __('cleanup provider'))))
                 : null;
-            $cleanedChoiceLabel = $reviewCleanProvider
-                ? __('Cleaned - :provider', ['provider' => $reviewCleanProvider])
-                : __('Cleaned');
-            $originalSelected = ! $photoReviewPhoto->use_cleaned_photo || ! $reviewCleanedAsset;
-            $cleanedSelected = $photoReviewPhoto->use_cleaned_photo && $reviewCleanedAsset;
+            $selectedCleanedAssetId = $selectedCleanedAsset?->id;
+            $originalSelected = ! $photoReviewPhoto->use_cleaned_photo || ! $selectedCleanedAsset;
+            $canCleanWithActiveProvider = $this->canEdit()
+                && is_string($activePhotoCleanupProviderKey)
+                && ! ($activeProviderCleanedAsset instanceof MediaAsset);
         @endphp
 
         <x-ui.modal
@@ -1107,8 +1112,8 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
                     </div>
 
                     <div class="flex items-center gap-2">
-                        @if ($reviewCleanedAsset)
-                            <x-ui.badge>{{ __('Original + cleaned') }}</x-ui.badge>
+                        @if ($reviewCleanedAssets->isNotEmpty())
+                            <x-ui.badge>{{ trans_choice(':count cleaned provider|:count cleaned providers', $reviewCleanedAssets->count(), ['count' => $reviewCleanedAssets->count()]) }}</x-ui.badge>
                         @else
                             <x-ui.badge>{{ __('Original only') }}</x-ui.badge>
                         @endif
@@ -1128,7 +1133,7 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
                 <div class="space-y-4 overflow-y-auto p-4 sm:p-5">
                     <div class="flex flex-wrap items-center justify-between gap-3">
                         <div class="flex flex-wrap items-center gap-2">
-                            @if ($reviewCleanedAsset)
+                            @if ($reviewCleanedAssets->isNotEmpty())
                                 <div class="inline-flex rounded-full border border-border-default bg-surface-subtle p-1 text-xs font-medium text-muted">
                                     <button
                                         type="button"
@@ -1148,46 +1153,28 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
                                         {{ __('Original') }}
                                     </button>
 
-                                    <button
-                                        type="button"
-                                        aria-pressed="{{ $cleanedSelected ? 'true' : 'false' }}"
-                                        @if ($this->canEdit() && ! $cleanedSelected)
-                                            wire:click="acceptCleanedPhoto({{ $photoReviewPhoto->id }})"
-                                            wire:loading.attr="disabled"
-                                            wire:target="acceptCleanedPhoto({{ $photoReviewPhoto->id }})"
-                                        @else
-                                            disabled
-                                        @endif
-                                        class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 {{ $cleanedSelected ? 'bg-surface-card text-ink shadow-sm' : ($this->canEdit() ? 'hover:bg-surface-card/70 hover:text-ink' : 'cursor-default') }}"
-                                    >
-                                        @if ($cleanedSelected)
-                                            <x-icon name="heroicon-o-check" class="h-3.5 w-3.5 text-status-success" />
-                                        @endif
-                                        {{ $cleanedChoiceLabel }}
-                                    </button>
-                                </div>
-                            @endif
-
-                            @if ($this->canEdit() && count($photoCleanupProviders) > 1)
-                                <div class="inline-flex rounded-full border border-border-default bg-surface-subtle p-1 text-xs font-medium text-muted" title="{{ __('Choose the provider used by the next cleanup or retry.') }}">
-                                    <span class="px-2 py-1 text-muted">{{ __('Provider') }}</span>
-                                    @foreach ($photoCleanupProviders as $cleanupProvider)
+                                    @foreach ($reviewCleanedAssets as $cleanedChoice)
+                                        @php
+                                            $choiceProvider = data_get($cleanedChoice->metadata, 'provider_label')
+                                                ?: \Illuminate\Support\Str::headline((string) data_get($cleanedChoice->metadata, 'provider', __('cleanup provider')));
+                                            $choiceSelected = $selectedCleanedAssetId === $cleanedChoice->id;
+                                        @endphp
                                         <button
                                             type="button"
-                                            aria-pressed="{{ $cleanupProvider['active'] ? 'true' : 'false' }}"
-                                            @if (! $cleanupProvider['active'])
-                                                wire:click="setPhotoCleanupProvider('{{ $cleanupProvider['key'] }}')"
+                                            aria-pressed="{{ $choiceSelected ? 'true' : 'false' }}"
+                                            @if ($this->canEdit() && ! $choiceSelected)
+                                                wire:click="acceptCleanedPhoto({{ $photoReviewPhoto->id }}, {{ $cleanedChoice->id }})"
                                                 wire:loading.attr="disabled"
-                                                wire:target="setPhotoCleanupProvider('{{ $cleanupProvider['key'] }}')"
+                                                wire:target="acceptCleanedPhoto({{ $photoReviewPhoto->id }})"
                                             @else
                                                 disabled
                                             @endif
-                                            class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 {{ $cleanupProvider['active'] ? 'bg-surface-card text-ink shadow-sm' : 'hover:bg-surface-card/70 hover:text-ink' }}"
+                                            class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 {{ $choiceSelected ? 'bg-surface-card text-ink shadow-sm' : ($this->canEdit() ? 'hover:bg-surface-card/70 hover:text-ink' : 'cursor-default') }}"
                                         >
-                                            @if ($cleanupProvider['active'])
+                                            @if ($choiceSelected)
                                                 <x-icon name="heroicon-o-check" class="h-3.5 w-3.5 text-status-success" />
                                             @endif
-                                            {{ $cleanupProvider['label'] }}
+                                            {{ $choiceProvider }}
                                         </button>
                                     @endforeach
                                 </div>
@@ -1217,10 +1204,10 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
                         </section>
 
                         <section class="space-y-2">
-                            <h3 class="text-sm font-semibold text-ink">{{ __('Cleaned') }}</h3>
+                            <h3 class="text-sm font-semibold text-ink">{{ $reviewCleanProvider ?? __('Cleaned') }}</h3>
 
                             @if ($reviewCleanedAsset)
-                                <div class="flex min-h-[22rem] items-center justify-center overflow-auto rounded-xl border p-3 {{ $cleanedSelected ? 'border-accent ring-2 ring-accent/20' : 'border-border-default' }}" :class="panelClass()" :style="panelStyle()">
+                                <div class="flex min-h-[22rem] items-center justify-center overflow-auto rounded-xl border p-3 {{ $selectedCleanedAssetId === $reviewCleanedAsset->id ? 'border-accent ring-2 ring-accent/20' : 'border-border-default' }}" :class="panelClass()" :style="panelStyle()">
                                     <img
                                         src="{{ $reviewCleanedAsset->displayUrl() }}"
                                         alt="{{ __('Cleaned photo: :filename', ['filename' => $reviewCleanedAsset->original_filename ?? $reviewFilename]) }}"
@@ -1265,15 +1252,24 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
 
                     @if ($this->canEdit())
                         <div class="flex flex-wrap items-center justify-end gap-2">
-                            @if ($reviewCleanedAsset)
-                                <x-ui.button type="button" variant="ghost" size="sm" wire:click="runPhotoCleanup({{ $photoReviewPhoto->id }})" wire:loading.attr="disabled" wire:target="runPhotoCleanup({{ $photoReviewPhoto->id }})">
-                                    <x-icon name="heroicon-o-arrow-path" class="h-4 w-4" />
-                                    {{ __('Retry cleanup') }}
-                                </x-ui.button>
-                            @else
+                            @if (count($photoCleanupProviders) > 1)
+                                <x-ui.select
+                                    id="photo-review-cleanup-provider"
+                                    wire:change="setPhotoCleanupProvider($event.target.value)"
+                                    class="min-w-40"
+                                >
+                                    @foreach ($photoCleanupProviders as $cleanupProvider)
+                                        <option value="{{ $cleanupProvider['key'] }}" @selected($cleanupProvider['active'])>
+                                            {{ $cleanupProvider['label'] }}
+                                        </option>
+                                    @endforeach
+                                </x-ui.select>
+                            @endif
+
+                            @if ($canCleanWithActiveProvider || ! $reviewCleanedAsset)
                                 <x-ui.button type="button" variant="primary" size="sm" wire:click="runPhotoCleanup({{ $photoReviewPhoto->id }})" wire:loading.attr="disabled" wire:target="runPhotoCleanup({{ $photoReviewPhoto->id }})">
                                     <x-icon name="heroicon-o-sparkles" class="h-4 w-4" />
-                                    {{ __('Clean photo') }}
+                                    {{ $activeCleanupProviderLabel ? __('Clean with :provider', ['provider' => $activeCleanupProviderLabel]) : __('Clean photo') }}
                                 </x-ui.button>
                             @endif
                         </div>

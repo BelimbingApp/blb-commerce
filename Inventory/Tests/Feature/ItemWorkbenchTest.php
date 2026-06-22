@@ -462,15 +462,17 @@ test('a cleaned photo can be accepted and reverted for marketplace listings', fu
 
     $item = Item::factory()->create(['company_id' => $user->company_id]);
     $photo = createInventoryItemPhoto($item);
-    backgroundRemovedDerivative($photo->mediaAsset);
+    $cleaned = backgroundRemovedDerivative($photo->mediaAsset);
 
     $component = Livewire::test(Show::class, ['item' => $item])
         ->call('openPhotoReview', $photo->id)
-        ->call('acceptCleanedPhoto', $photo->id)
+        ->call('acceptCleanedPhoto', $photo->id, $cleaned->id)
         ->assertSet('photoReviewModalOpen', true)
         ->assertSet('photoReviewPhotoId', $photo->id);
 
-    expect($photo->refresh()->use_cleaned_photo)->toBeTrue();
+    expect($photo->refresh()->use_cleaned_photo)->toBeTrue()
+        ->and($photo->selected_cleaned_asset_id)->toBe($cleaned->id)
+        ->and($photo->displayAsset()?->id)->toBe($cleaned->id);
 
     $component
         ->call('revertCleanedPhoto', $photo->id)
@@ -495,8 +497,7 @@ test('photo review shows cleanup provenance and can switch the cleanup provider'
 
     Livewire::test(Show::class, ['item' => $item->fresh()])
         ->call('openPhotoReview', $photo->id)
-        ->assertSee(__('Cleaned - :provider', ['provider' => 'PhotoRoom']))
-        ->assertSee(__('Provider'))
+        ->assertSee('PhotoRoom')
         ->assertSee('Poof')
         ->call('setPhotoCleanupProvider', 'stability')
         ->assertDispatched('notify', variant: 'error', message: __('That provider is not ready. Add a key first.'));
@@ -509,6 +510,68 @@ test('photo review shows cleanup provenance and can switch the cleanup provider'
         ->assertDispatched('notify', variant: 'success', message: __('Photo cleanup now uses :provider.', ['provider' => 'Poof']));
 
     expect(app(PhotoCleanupSelection::class)->activeProviderKey($user->company_id))->toBe('poof');
+});
+
+test('photo cleanup keeps one cleaned derivative per provider', function (): void {
+    Storage::fake('local');
+
+    $user = createAdminUser();
+    configurePhotoRoom(companyId: $user->company_id);
+    configureImageProviderKey('poof', $user->company_id);
+
+    Http::fake([
+        'https://api.poof.bg/v1/remove' => Http::response('POOF-PNG-BYTES', 200, ['Content-Type' => 'image/png']),
+    ]);
+
+    $this->actingAs($user);
+
+    $item = Item::factory()->create(['company_id' => $user->company_id]);
+    $photo = createInventoryItemPhoto($item);
+    $photoRoom = backgroundRemovedDerivative($photo->mediaAsset, 'PHOTOROOM-PNG-BYTES');
+
+    Livewire::test(Show::class, ['item' => $item->fresh()])
+        ->call('openPhotoReview', $photo->id)
+        ->call('setPhotoCleanupProvider', 'poof')
+        ->call('runPhotoCleanup', $photo->id)
+        ->assertSet('photoReviewModalOpen', true)
+        ->assertSee('PhotoRoom')
+        ->assertSee('Poof');
+
+    $cleanedAssets = $photo->fresh('cleanedAssets')->cleanedAssets;
+
+    expect($cleanedAssets)->toHaveCount(2)
+        ->and($cleanedAssets->pluck('metadata.provider')->all())->toContain('photoroom', 'poof')
+        ->and($cleanedAssets->firstWhere('id', $photoRoom->id))->toBeInstanceOf(MediaAsset::class)
+        ->and($photo->fresh()->use_cleaned_photo)->toBeFalse();
+});
+
+test('photo cleanup uses the visible ready provider when the saved provider is not ready', function (): void {
+    Storage::fake('local');
+
+    $user = createAdminUser();
+    configureImageProviderKey('poof', $user->company_id);
+
+    Http::fake([
+        'https://api.poof.bg/v1/remove' => Http::response('POOF-PNG-BYTES', 200, ['Content-Type' => 'image/png']),
+    ]);
+
+    $this->actingAs($user);
+
+    $item = Item::factory()->create(['company_id' => $user->company_id]);
+    $photo = createInventoryItemPhoto($item);
+
+    expect(app(PhotoCleanupSelection::class)->activeProviderKey($user->company_id))->toBe('photoroom');
+
+    Livewire::test(Show::class, ['item' => $item->fresh()])
+        ->call('runPhotoCleanup', $photo->id)
+        ->assertSet('photoReviewModalOpen', true)
+        ->assertSee('Poof');
+
+    $cleaned = $photo->fresh('cleanedAsset')->cleanedAsset;
+
+    expect($cleaned)->toBeInstanceOf(MediaAsset::class)
+        ->and(data_get($cleaned->metadata, 'provider'))->toBe('poof')
+        ->and(app(PhotoCleanupSelection::class)->activeProviderKey($user->company_id))->toBe('poof');
 });
 
 test('acceptCleanedPhoto is a no-op when no cleaned derivative exists', function (): void {

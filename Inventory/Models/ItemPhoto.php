@@ -3,8 +3,10 @@
 namespace App\Modules\Commerce\Inventory\Models;
 
 use App\Base\Media\Models\MediaAsset;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
@@ -18,6 +20,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $item_id
  * @property int $media_asset_id
+ * @property int|null $selected_cleaned_asset_id
  * @property int $sort_order
  * @property bool $use_cleaned_photo
  * @property Carbon|null $created_at
@@ -25,6 +28,8 @@ use Illuminate\Support\Carbon;
  * @property-read Item $item
  * @property-read MediaAsset $mediaAsset
  * @property-read MediaAsset|null $cleanedAsset
+ * @property-read Collection<int, MediaAsset> $cleanedAssets
+ * @property-read MediaAsset|null $selectedCleanedAsset
  */
 class ItemPhoto extends Model
 {
@@ -36,6 +41,7 @@ class ItemPhoto extends Model
     protected $fillable = [
         'item_id',
         'media_asset_id',
+        'selected_cleaned_asset_id',
         'sort_order',
         'use_cleaned_photo',
     ];
@@ -67,15 +73,37 @@ class ItemPhoto extends Model
     }
 
     /**
-     * The `background_removed` derivative of this photo's media asset, if a
-     * photo-cleanup run has produced one.
+     * @return BelongsTo<MediaAsset, $this>
+     */
+    public function selectedCleanedAsset(): BelongsTo
+    {
+        return $this->belongsTo(MediaAsset::class, 'selected_cleaned_asset_id');
+    }
+
+    /**
+     * The latest `background_removed` derivative of this photo's media asset,
+     * if a photo-cleanup run has produced one. Multiple providers can each keep
+     * a derivative; this remains the fallback for legacy callers.
      *
      * @return HasOne<MediaAsset, $this>
      */
     public function cleanedAsset(): HasOne
     {
         return $this->hasOne(MediaAsset::class, 'parent_id', 'media_asset_id')
-            ->where('kind', MediaAsset::KIND_BACKGROUND_REMOVED);
+            ->where('kind', MediaAsset::KIND_BACKGROUND_REMOVED)
+            ->latestOfMany();
+    }
+
+    /**
+     * Every provider-specific cleaned derivative for this photo.
+     *
+     * @return HasMany<MediaAsset, $this>
+     */
+    public function cleanedAssets(): HasMany
+    {
+        return $this->hasMany(MediaAsset::class, 'parent_id', 'media_asset_id')
+            ->where('kind', MediaAsset::KIND_BACKGROUND_REMOVED)
+            ->orderBy('id');
     }
 
     /**
@@ -87,7 +115,7 @@ class ItemPhoto extends Model
     public function displayAsset(): ?MediaAsset
     {
         if ($this->use_cleaned_photo) {
-            $cleaned = $this->cleanedAsset;
+            $cleaned = $this->activeCleanedAsset();
 
             if ($cleaned instanceof MediaAsset) {
                 return $cleaned;
@@ -95,6 +123,35 @@ class ItemPhoto extends Model
         }
 
         return $this->mediaAsset;
+    }
+
+    public function activeCleanedAsset(): ?MediaAsset
+    {
+        $selected = $this->selectedCleanedAsset;
+
+        if ($selected instanceof MediaAsset
+            && $selected->parent_id === $this->media_asset_id
+            && $selected->kind === MediaAsset::KIND_BACKGROUND_REMOVED) {
+            return $selected;
+        }
+
+        return $this->cleanedAsset;
+    }
+
+    public function cleanedAssetForProvider(string $providerKey): ?MediaAsset
+    {
+        if ($this->relationLoaded('cleanedAssets')) {
+            $asset = $this->cleanedAssets
+                ->first(fn (MediaAsset $asset): bool => data_get($asset->metadata, 'provider') === $providerKey);
+
+            return $asset instanceof MediaAsset ? $asset : null;
+        }
+
+        $asset = $this->cleanedAssets()
+            ->get()
+            ->first(fn (MediaAsset $asset): bool => data_get($asset->metadata, 'provider') === $providerKey);
+
+        return $asset instanceof MediaAsset ? $asset : null;
     }
 
     /**
