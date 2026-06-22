@@ -1123,17 +1123,12 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
                 </div>
 
                 <div class="space-y-4 overflow-y-auto p-4 sm:p-5">
-                    <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
                         <div class="inline-flex rounded-full border border-border-default bg-surface-subtle p-1 text-xs font-medium text-muted">
                             <button type="button" class="rounded-full px-3 py-1" :class="background === 'checker' ? 'bg-surface-card text-ink shadow-sm' : ''" @click="background = 'checker'">{{ __('Checker') }}</button>
                             <button type="button" class="rounded-full px-3 py-1" :class="background === 'light' ? 'bg-surface-card text-ink shadow-sm' : ''" @click="background = 'light'">{{ __('Light') }}</button>
                             <button type="button" class="rounded-full px-3 py-1" :class="background === 'dark' ? 'bg-surface-card text-ink shadow-sm' : ''" @click="background = 'dark'">{{ __('Dark') }}</button>
                         </div>
-
-                        <button type="button" class="inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-ink" @click="zoomed = ! zoomed">
-                            <x-icon name="heroicon-o-magnifying-glass-plus" class="h-4 w-4" />
-                            <span x-text="zoomed ? @js(__('Reset zoom')) : @js(__('Click image to zoom'))"></span>
-                        </button>
                     </div>
 
                     <div class="grid gap-4 lg:grid-cols-2">
