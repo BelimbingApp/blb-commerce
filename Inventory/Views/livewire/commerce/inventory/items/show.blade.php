@@ -1064,6 +1064,9 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
                 ? (data_get($reviewCleanedAsset->metadata, 'provider_label')
                     ?: \Illuminate\Support\Str::headline((string) data_get($reviewCleanedAsset->metadata, 'provider', __('cleanup provider'))))
                 : null;
+            $cleanedChoiceLabel = $reviewCleanProvider
+                ? __('Cleaned - :provider', ['provider' => $reviewCleanProvider])
+                : __('Cleaned');
             $originalSelected = ! $photoReviewPhoto->use_cleaned_photo || ! $reviewCleanedAsset;
             $cleanedSelected = $photoReviewPhoto->use_cleaned_photo && $reviewCleanedAsset;
         @endphp
@@ -1124,45 +1127,72 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
 
                 <div class="space-y-4 overflow-y-auto p-4 sm:p-5">
                     <div class="flex flex-wrap items-center justify-between gap-3">
-                        @if ($reviewCleanedAsset)
-                            <div class="inline-flex rounded-full border border-border-default bg-surface-subtle p-1 text-xs font-medium text-muted">
-                                <button
-                                    type="button"
-                                    aria-pressed="{{ $originalSelected ? 'true' : 'false' }}"
-                                    @if ($this->canEdit() && ! $originalSelected)
-                                        wire:click="revertCleanedPhoto({{ $photoReviewPhoto->id }})"
-                                        wire:loading.attr="disabled"
-                                        wire:target="revertCleanedPhoto({{ $photoReviewPhoto->id }})"
-                                    @else
-                                        disabled
-                                    @endif
-                                    class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 {{ $originalSelected ? 'bg-surface-card text-ink shadow-sm' : ($this->canEdit() ? 'hover:bg-surface-card/70 hover:text-ink' : 'cursor-default') }}"
-                                >
-                                    @if ($originalSelected)
-                                        <x-icon name="heroicon-o-check" class="h-3.5 w-3.5 text-status-success" />
-                                    @endif
-                                    {{ __('Original') }}
-                                </button>
+                        <div class="flex flex-wrap items-center gap-2">
+                            @if ($reviewCleanedAsset)
+                                <div class="inline-flex rounded-full border border-border-default bg-surface-subtle p-1 text-xs font-medium text-muted">
+                                    <button
+                                        type="button"
+                                        aria-pressed="{{ $originalSelected ? 'true' : 'false' }}"
+                                        @if ($this->canEdit() && ! $originalSelected)
+                                            wire:click="revertCleanedPhoto({{ $photoReviewPhoto->id }})"
+                                            wire:loading.attr="disabled"
+                                            wire:target="revertCleanedPhoto({{ $photoReviewPhoto->id }})"
+                                        @else
+                                            disabled
+                                        @endif
+                                        class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 {{ $originalSelected ? 'bg-surface-card text-ink shadow-sm' : ($this->canEdit() ? 'hover:bg-surface-card/70 hover:text-ink' : 'cursor-default') }}"
+                                    >
+                                        @if ($originalSelected)
+                                            <x-icon name="heroicon-o-check" class="h-3.5 w-3.5 text-status-success" />
+                                        @endif
+                                        {{ __('Original') }}
+                                    </button>
 
-                                <button
-                                    type="button"
-                                    aria-pressed="{{ $cleanedSelected ? 'true' : 'false' }}"
-                                    @if ($this->canEdit() && ! $cleanedSelected)
-                                        wire:click="acceptCleanedPhoto({{ $photoReviewPhoto->id }})"
-                                        wire:loading.attr="disabled"
-                                        wire:target="acceptCleanedPhoto({{ $photoReviewPhoto->id }})"
-                                    @else
-                                        disabled
-                                    @endif
-                                    class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 {{ $cleanedSelected ? 'bg-surface-card text-ink shadow-sm' : ($this->canEdit() ? 'hover:bg-surface-card/70 hover:text-ink' : 'cursor-default') }}"
-                                >
-                                    @if ($cleanedSelected)
-                                        <x-icon name="heroicon-o-check" class="h-3.5 w-3.5 text-status-success" />
-                                    @endif
-                                    {{ __('Cleaned') }}
-                                </button>
-                            </div>
-                        @endif
+                                    <button
+                                        type="button"
+                                        aria-pressed="{{ $cleanedSelected ? 'true' : 'false' }}"
+                                        @if ($this->canEdit() && ! $cleanedSelected)
+                                            wire:click="acceptCleanedPhoto({{ $photoReviewPhoto->id }})"
+                                            wire:loading.attr="disabled"
+                                            wire:target="acceptCleanedPhoto({{ $photoReviewPhoto->id }})"
+                                        @else
+                                            disabled
+                                        @endif
+                                        class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 {{ $cleanedSelected ? 'bg-surface-card text-ink shadow-sm' : ($this->canEdit() ? 'hover:bg-surface-card/70 hover:text-ink' : 'cursor-default') }}"
+                                    >
+                                        @if ($cleanedSelected)
+                                            <x-icon name="heroicon-o-check" class="h-3.5 w-3.5 text-status-success" />
+                                        @endif
+                                        {{ $cleanedChoiceLabel }}
+                                    </button>
+                                </div>
+                            @endif
+
+                            @if ($this->canEdit() && count($photoCleanupProviders) > 1)
+                                <div class="inline-flex rounded-full border border-border-default bg-surface-subtle p-1 text-xs font-medium text-muted" title="{{ __('Choose the provider used by the next cleanup or retry.') }}">
+                                    <span class="px-2 py-1 text-muted">{{ __('Provider') }}</span>
+                                    @foreach ($photoCleanupProviders as $cleanupProvider)
+                                        <button
+                                            type="button"
+                                            aria-pressed="{{ $cleanupProvider['active'] ? 'true' : 'false' }}"
+                                            @if (! $cleanupProvider['active'])
+                                                wire:click="setPhotoCleanupProvider('{{ $cleanupProvider['key'] }}')"
+                                                wire:loading.attr="disabled"
+                                                wire:target="setPhotoCleanupProvider('{{ $cleanupProvider['key'] }}')"
+                                            @else
+                                                disabled
+                                            @endif
+                                            class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 {{ $cleanupProvider['active'] ? 'bg-surface-card text-ink shadow-sm' : 'hover:bg-surface-card/70 hover:text-ink' }}"
+                                        >
+                                            @if ($cleanupProvider['active'])
+                                                <x-icon name="heroicon-o-check" class="h-3.5 w-3.5 text-status-success" />
+                                            @endif
+                                            {{ $cleanupProvider['label'] }}
+                                        </button>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
 
                         <div class="inline-flex rounded-full border border-border-default bg-surface-subtle p-1 text-xs font-medium text-muted">
                             <button type="button" class="rounded-full px-3 py-1" :class="background === 'checker' ? 'bg-surface-card text-ink shadow-sm' : ''" @click="background = 'checker'">{{ __('Checker') }}</button>

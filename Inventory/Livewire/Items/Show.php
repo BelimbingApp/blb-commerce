@@ -8,6 +8,7 @@ use App\Base\Foundation\Livewire\Concerns\SavesValidatedFields;
 use App\Base\Foundation\ValueObjects\Money;
 use App\Base\Media\Models\MediaAsset;
 use App\Base\Media\PhotoCleanup\PhotoCleanupException;
+use App\Base\Media\PhotoCleanup\PhotoCleanupSelection;
 use App\Modules\Commerce\Catalog\Models\Category;
 use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Inventory\Livewire\Items\Concerns\ManagesItemAttributes;
@@ -23,6 +24,7 @@ use App\Modules\Commerce\Marketplace\Services\MarketplaceAvailabilitySyncService
 use App\Modules\Commerce\Marketplace\Services\MarketplaceChannelRegistry;
 use App\Modules\Commerce\Marketplace\Services\MarketplaceListingPushService;
 use App\Modules\Commerce\Plugins\Services\CommercePluginRegistry;
+use App\Modules\Core\AI\Services\AiProviderFamilyRegistry;
 use Illuminate\Contracts\View\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -349,6 +351,24 @@ class Show extends Component
         $this->movePhotoReview(1);
     }
 
+    public function setPhotoCleanupProvider(string $providerKey): void
+    {
+        $this->authorizeUpdate();
+
+        $provider = collect($this->readyPhotoCleanupProviders())
+            ->first(fn (array $provider): bool => $provider['key'] === $providerKey);
+
+        if ($provider === null) {
+            $this->notifyError(__('That provider is not ready. Add a key first.'));
+
+            return;
+        }
+
+        app(PhotoCleanupSelection::class)->setActiveProvider($this->item->company_id, $providerKey);
+
+        $this->notify(__('Photo cleanup now uses :provider.', ['provider' => $provider['label']]));
+    }
+
     /**
      * Run background removal on one photo, creating or replacing its cleaned
      * derivative. Does not change which version (original or cleaned) the item
@@ -641,6 +661,7 @@ class Show extends Component
             'extensionReadinessPanels' => app(CommercePluginRegistry::class)->itemReadinessPanels($this->item),
             'photoReviewPhoto' => $this->photoReviewModalOpen ? $this->photoReviewPhoto() : null,
             'photoReviewPosition' => $this->photoReviewPosition(),
+            'photoCleanupProviders' => $this->readyPhotoCleanupProviders(),
         ]);
     }
 
@@ -828,6 +849,26 @@ class Show extends Component
             'current' => is_int($index) ? $index + 1 : 0,
             'total' => $photoIds->count(),
         ];
+    }
+
+    /**
+     * @return list<array{key: string, label: string, active: bool}>
+     */
+    private function readyPhotoCleanupProviders(): array
+    {
+        $providers = app(AiProviderFamilyRegistry::class)
+            ->family('image')
+            ?->providers($this->item->company_id) ?? [];
+
+        return collect($providers)
+            ->filter(fn ($provider): bool => $provider->connected)
+            ->map(fn ($provider): array => [
+                'key' => $provider->providerKey,
+                'label' => $provider->displayName,
+                'active' => $provider->active,
+            ])
+            ->values()
+            ->all();
     }
 
     /**

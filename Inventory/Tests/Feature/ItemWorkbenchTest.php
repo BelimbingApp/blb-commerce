@@ -1,6 +1,7 @@
 <?php
 
 use App\Base\Media\Models\MediaAsset;
+use App\Base\Media\PhotoCleanup\PhotoCleanupSelection;
 use App\Base\Media\Services\MediaAssetStore;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
@@ -477,6 +478,37 @@ test('a cleaned photo can be accepted and reverted for marketplace listings', fu
         ->assertSet('photoReviewPhotoId', $photo->id);
 
     expect($photo->refresh()->use_cleaned_photo)->toBeFalse();
+});
+
+test('photo review shows cleanup provenance and can switch the cleanup provider', function (): void {
+    Storage::fake('local');
+
+    $user = createAdminUser();
+    configurePhotoRoom(companyId: $user->company_id);
+    configureImageProviderKey('poof', $user->company_id);
+
+    $this->actingAs($user);
+
+    $item = Item::factory()->create(['company_id' => $user->company_id]);
+    $photo = createInventoryItemPhoto($item);
+    backgroundRemovedDerivative($photo->mediaAsset);
+
+    Livewire::test(Show::class, ['item' => $item->fresh()])
+        ->call('openPhotoReview', $photo->id)
+        ->assertSee(__('Cleaned - :provider', ['provider' => 'PhotoRoom']))
+        ->assertSee(__('Provider'))
+        ->assertSee('Poof')
+        ->call('setPhotoCleanupProvider', 'stability')
+        ->assertDispatched('notify', variant: 'error', message: __('That provider is not ready. Add a key first.'));
+
+    expect(app(PhotoCleanupSelection::class)->activeProviderKey($user->company_id))->toBe('photoroom');
+
+    Livewire::test(Show::class, ['item' => $item->fresh()])
+        ->call('openPhotoReview', $photo->id)
+        ->call('setPhotoCleanupProvider', 'poof')
+        ->assertDispatched('notify', variant: 'success', message: __('Photo cleanup now uses :provider.', ['provider' => 'Poof']));
+
+    expect(app(PhotoCleanupSelection::class)->activeProviderKey($user->company_id))->toBe('poof');
 });
 
 test('acceptCleanedPhoto is a no-op when no cleaned derivative exists', function (): void {
