@@ -1,6 +1,8 @@
 <?php
 
+use App\Base\Media\Models\MediaAsset;
 use App\Modules\Commerce\Inventory\Livewire\Items\Show;
+use App\Modules\Commerce\Inventory\Models\ItemPhoto;
 
 /** @var Show $this */
 /** @var list<array<string, mixed>> $channelRows */
@@ -697,19 +699,21 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 
                         <div x-show="open" x-cloak x-transition class="mt-3 space-y-2">
                             @foreach ($panel['entries'] as $entry)
-                                @php($entryVariant = match ($entry['severity']) {
-                                    'success' => 'success',
-                                    'blocker' => 'danger',
-                                    'warning' => 'warning',
-                                    default => 'info',
-                                })
-                                @php($actionTargets = [
-                                    'item_facts' => ['label' => __('Edit item facts'), 'href' => '#item-facts'],
-                                    'catalog_fit' => ['label' => __('Edit catalog fit'), 'href' => '#catalog-fit'],
-                                    'fitment' => ['label' => __('Edit fitment'), 'href' => '#fitment'],
-                                    'attributes' => ['label' => __('Edit attributes'), 'href' => '#attributes'],
-                                    'photos' => ['label' => __('Edit photos'), 'href' => '#photos'],
-                                ])
+                                @php
+                                    $entryVariant = match ($entry['severity']) {
+                                        'success' => 'success',
+                                        'blocker' => 'danger',
+                                        'warning' => 'warning',
+                                        default => 'info',
+                                    };
+                                    $actionTargets = [
+                                        'item_facts' => ['label' => __('Edit item facts'), 'href' => '#item-facts'],
+                                        'catalog_fit' => ['label' => __('Edit catalog fit'), 'href' => '#catalog-fit'],
+                                        'fitment' => ['label' => __('Edit fitment'), 'href' => '#fitment'],
+                                        'attributes' => ['label' => __('Edit attributes'), 'href' => '#attributes'],
+                                        'photos' => ['label' => __('Edit photos'), 'href' => '#photos'],
+                                    ];
+                                @endphp
 
                                 <div wire:key="extension-readiness-{{ $panel['id'] }}-{{ $entry['code'] }}" class="rounded-2xl border border-border-default bg-surface-subtle p-3">
                                     <div class="flex items-start gap-3">
@@ -779,12 +783,35 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                             </div>
                         </div>
 
+                        @php
+                            $cleanedPhotoCount = $item->photos
+                                ->filter(fn (ItemPhoto $photo): bool => $photo->cleanedAsset instanceof MediaAsset)
+                                ->count();
+                            $unreviewedCleanedPhotoCount = $item->photos
+                                ->filter(fn (ItemPhoto $photo): bool => $photo->cleanedAsset instanceof MediaAsset && ! $photo->use_cleaned_photo)
+                                ->count();
+                        @endphp
+
                         <div class="flex items-center justify-between mb-3">
                             <div>
                                 <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Media') }}</h2>
                                 <p class="mt-1 text-sm text-muted">{{ __('Buyer-facing photos used by marketplace listing drafts.') }}</p>
                             </div>
                             <div class="flex items-center gap-2">
+                                @if ($this->canEdit() && $cleanedPhotoCount > 0)
+                                    <x-ui.button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        wire:click="openFirstCleanedPhotoReview"
+                                        title="{{ __('Review original and cleaned photos side by side.') }}"
+                                    >
+                                        <x-icon name="heroicon-o-arrows-right-left" class="h-4 w-4" />
+                                        {{ $unreviewedCleanedPhotoCount > 0
+                                            ? trans_choice('Review :count cleaned photo|Review :count cleaned photos', $unreviewedCleanedPhotoCount, ['count' => $unreviewedCleanedPhotoCount])
+                                            : __('Review cleaned') }}
+                                    </x-ui.button>
+                                @endif
                                 @if ($this->canEdit() && $item->photos->isNotEmpty())
                                     <x-ui.button
                                         type="button"
@@ -808,18 +835,30 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                     @else
                         <div class="grid grid-cols-2 gap-3">
                             @foreach ($item->photos as $photo)
-                                @php($displayAsset = $photo->displayAsset())
-                                @php($cleanedAsset = $photo->cleanedAsset)
-                                @php($filename = $displayAsset?->original_filename ?? '')
+                                @php
+                                    $displayAsset = $photo->displayAsset();
+                                    $cleanedAsset = $photo->cleanedAsset;
+                                    $filename = $displayAsset?->original_filename ?? '';
+                                @endphp
                                 <div wire:key="item-photo-{{ $photo->id }}" class="overflow-hidden rounded-2xl border border-border-default bg-surface-subtle">
                                     <div class="group relative">
                                         @if ($displayAsset)
-                                            <img
-                                                src="{{ $displayAsset->displayUrl() }}"
-                                                alt="{{ $filename }}"
-                                                class="aspect-square w-full object-cover"
-                                                loading="lazy"
-                                            />
+                                            <button
+                                                type="button"
+                                                wire:click="openPhotoReview({{ $photo->id }})"
+                                                class="block w-full cursor-zoom-in text-left"
+                                                aria-label="{{ __('Review photo :number', ['number' => $loop->iteration]) }}"
+                                            >
+                                                <img
+                                                    src="{{ $displayAsset->displayUrl() }}"
+                                                    alt="{{ $filename }}"
+                                                    class="aspect-square w-full object-cover"
+                                                    loading="lazy"
+                                                />
+                                                <span class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-surface-secondary/80 to-transparent px-3 pb-2 pt-8 text-xs font-medium text-accent-on opacity-0 transition-opacity group-hover:opacity-100">
+                                                    {{ $cleanedAsset ? __('Review original vs cleaned') : __('Open large photo') }}
+                                                </span>
+                                            </button>
                                         @endif
 
                                         @if ($cleanedAsset)
@@ -845,20 +884,25 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                     @if ($this->canEdit())
                                         <div class="flex flex-col gap-2 border-t border-border-default p-2">
                                             @if ($cleanedAsset)
-                                                @php($cleanedAt = data_get($cleanedAsset->metadata, 'cleaned_at'))
-                                                @php($cleanEnvironment = data_get($cleanedAsset->metadata, 'environment', __('unknown')))
-                                                @php($cleanProvider = data_get($cleanedAsset->metadata, 'provider_label')
-                                                    ?: \Illuminate\Support\Str::headline((string) data_get($cleanedAsset->metadata, 'provider', __('cleanup provider'))))
+                                                @php
+                                                    $cleanedAt = data_get($cleanedAsset->metadata, 'cleaned_at');
+                                                    $cleanProvider = data_get($cleanedAsset->metadata, 'provider_label')
+                                                        ?: \Illuminate\Support\Str::headline((string) data_get($cleanedAsset->metadata, 'provider', __('cleanup provider')));
+                                                @endphp
                                                 <p class="text-[11px] text-muted">
-                                                    {{ __('Cleaned :time via :provider (:environment)', [
+                                                    {{ __('Cleaned :time via :provider', [
                                                         'time' => $cleanedAt ? \Illuminate\Support\Carbon::parse($cleanedAt)->diffForHumans() : __('recently'),
                                                         'provider' => $cleanProvider,
-                                                        'environment' => $cleanEnvironment,
                                                     ]) }}
                                                 </p>
                                             @endif
 
                                             <div class="flex flex-wrap items-center gap-2">
+                                                <x-ui.button type="button" variant="ghost" size="sm" wire:click="openPhotoReview({{ $photo->id }})">
+                                                    <x-icon name="heroicon-o-magnifying-glass-plus" class="h-3.5 w-3.5" />
+                                                    {{ __('Review') }}
+                                                </x-ui.button>
+
                                                 @if ($cleanedAsset)
                                                     @if ($photo->use_cleaned_photo)
                                                         <x-ui.button type="button" variant="outline" size="sm" wire:click="revertCleanedPhoto({{ $photo->id }})" wire:loading.attr="disabled" wire:target="revertCleanedPhoto({{ $photo->id }}),runPhotoCleanupBatch">
@@ -1009,4 +1053,192 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
             </div>
         </div>
     </div>
+
+    @if ($photoReviewPhoto instanceof ItemPhoto)
+        @php
+            $reviewOriginalAsset = $photoReviewPhoto->mediaAsset;
+            $reviewCleanedAsset = $photoReviewPhoto->cleanedAsset;
+            $reviewFilename = $reviewOriginalAsset?->original_filename ?? __('Photo');
+            $reviewCleanedAt = $reviewCleanedAsset ? data_get($reviewCleanedAsset->metadata, 'cleaned_at') : null;
+            $reviewCleanProvider = $reviewCleanedAsset
+                ? (data_get($reviewCleanedAsset->metadata, 'provider_label')
+                    ?: \Illuminate\Support\Str::headline((string) data_get($reviewCleanedAsset->metadata, 'provider', __('cleanup provider'))))
+                : null;
+        @endphp
+
+        <x-ui.modal
+            wire:model="photoReviewModalOpen"
+            wire:key="photo-review-modal-{{ $photoReviewPhoto->id }}"
+            class="max-w-6xl overflow-hidden p-0"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="photo-review-title"
+            x-data="{
+                background: 'checker',
+                zoomed: false,
+                panelClass() {
+                    return this.background === 'dark' ? 'bg-surface-secondary' : 'bg-surface-card';
+                },
+                panelStyle() {
+                    return this.background === 'checker'
+                        ? 'background-color: var(--color-surface-card); background-image: linear-gradient(45deg, var(--color-border-default) 25%, transparent 25%), linear-gradient(-45deg, var(--color-border-default) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--color-border-default) 75%), linear-gradient(-45deg, transparent 75%, var(--color-border-default) 75%); background-size: 24px 24px; background-position: 0 0, 0 12px, 12px -12px, -12px 0;'
+                        : '';
+                },
+            }"
+            x-init="$nextTick(() => $refs.closeButton?.focus())"
+            @keydown.escape.window="$wire.closePhotoReview()"
+            @keydown.arrow-left.window="$wire.previousPhotoReview()"
+            @keydown.arrow-right.window="$wire.nextPhotoReview()"
+        >
+            <div class="flex max-h-[92vh] flex-col overflow-hidden">
+                <div class="flex items-start justify-between gap-4 border-b border-border-default px-4 py-3 sm:px-5">
+                    <div>
+                        <h2 id="photo-review-title" class="text-base font-semibold text-ink">{{ __('Photo review') }}</h2>
+                        <p class="mt-1 text-sm text-muted">
+                            {{ __('Photo :current of :total', ['current' => $photoReviewPosition['current'], 'total' => $photoReviewPosition['total']]) }}
+                            <span aria-hidden="true">·</span>
+                            {{ $reviewFilename }}
+                        </p>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        @if ($reviewCleanedAsset)
+                            <x-ui.badge :variant="$photoReviewPhoto->use_cleaned_photo ? 'success' : 'default'">
+                                {{ $photoReviewPhoto->use_cleaned_photo ? __('Cleaned in use') : __('Original in use') }}
+                            </x-ui.badge>
+                        @else
+                            <x-ui.badge>{{ __('Original only') }}</x-ui.badge>
+                        @endif
+
+                        <button
+                            x-ref="closeButton"
+                            type="button"
+                            wire:click="closePhotoReview"
+                            class="inline-flex h-9 w-9 items-center justify-center rounded-full text-muted hover:bg-surface-subtle hover:text-ink"
+                            aria-label="{{ __('Close photo review') }}"
+                        >
+                            <x-icon name="heroicon-o-x-mark" class="h-5 w-5" />
+                        </button>
+                    </div>
+                </div>
+
+                <div class="space-y-4 overflow-y-auto p-4 sm:p-5">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div class="inline-flex rounded-full border border-border-default bg-surface-subtle p-1 text-xs font-medium text-muted">
+                            <button type="button" class="rounded-full px-3 py-1" :class="background === 'checker' ? 'bg-surface-card text-ink shadow-sm' : ''" @click="background = 'checker'">{{ __('Checker') }}</button>
+                            <button type="button" class="rounded-full px-3 py-1" :class="background === 'light' ? 'bg-surface-card text-ink shadow-sm' : ''" @click="background = 'light'">{{ __('Light') }}</button>
+                            <button type="button" class="rounded-full px-3 py-1" :class="background === 'dark' ? 'bg-surface-card text-ink shadow-sm' : ''" @click="background = 'dark'">{{ __('Dark') }}</button>
+                        </div>
+
+                        <button type="button" class="inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-ink" @click="zoomed = ! zoomed">
+                            <x-icon name="heroicon-o-magnifying-glass-plus" class="h-4 w-4" />
+                            <span x-text="zoomed ? @js(__('Reset zoom')) : @js(__('Click image to zoom'))"></span>
+                        </button>
+                    </div>
+
+                    <div class="grid gap-4 lg:grid-cols-2">
+                        <section class="space-y-2">
+                            <div class="flex items-center justify-between gap-2">
+                                <h3 class="text-sm font-semibold text-ink">{{ __('Original') }}</h3>
+                                @if (! $photoReviewPhoto->use_cleaned_photo || ! $reviewCleanedAsset)
+                                    <x-ui.badge variant="success">{{ __('Listing uses this') }}</x-ui.badge>
+                                @endif
+                            </div>
+
+                            <div class="flex min-h-[22rem] items-center justify-center overflow-auto rounded-xl border border-border-default p-3" :class="panelClass()" :style="panelStyle()">
+                                <img
+                                    src="{{ $reviewOriginalAsset->displayUrl() }}"
+                                    alt="{{ __('Original photo: :filename', ['filename' => $reviewFilename]) }}"
+                                    class="max-h-[64vh] w-full object-contain transition-transform duration-150"
+                                    :class="zoomed ? 'scale-150 cursor-zoom-out' : 'cursor-zoom-in'"
+                                    @click="zoomed = ! zoomed"
+                                />
+                            </div>
+                        </section>
+
+                        <section class="space-y-2">
+                            <div class="flex items-center justify-between gap-2">
+                                <h3 class="text-sm font-semibold text-ink">{{ __('Cleaned') }}</h3>
+                                @if ($photoReviewPhoto->use_cleaned_photo && $reviewCleanedAsset)
+                                    <x-ui.badge variant="success">{{ __('Listing uses this') }}</x-ui.badge>
+                                @elseif ($reviewCleanedAsset)
+                                    <x-ui.badge>{{ __('Available') }}</x-ui.badge>
+                                @endif
+                            </div>
+
+                            @if ($reviewCleanedAsset)
+                                <div class="flex min-h-[22rem] items-center justify-center overflow-auto rounded-xl border border-border-default p-3" :class="panelClass()" :style="panelStyle()">
+                                    <img
+                                        src="{{ $reviewCleanedAsset->displayUrl() }}"
+                                        alt="{{ __('Cleaned photo: :filename', ['filename' => $reviewCleanedAsset->original_filename ?? $reviewFilename]) }}"
+                                        class="max-h-[64vh] w-full object-contain transition-transform duration-150"
+                                        :class="zoomed ? 'scale-150 cursor-zoom-out' : 'cursor-zoom-in'"
+                                        @click="zoomed = ! zoomed"
+                                    />
+                                </div>
+                            @else
+                                <div class="flex min-h-[22rem] flex-col items-center justify-center rounded-xl border border-dashed border-border-default bg-surface-subtle p-6 text-center">
+                                    <div class="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-surface-card text-muted">
+                                        <x-icon name="heroicon-o-sparkles" class="h-6 w-6" />
+                                    </div>
+                                    <p class="text-sm font-medium text-ink">{{ __('No cleaned version yet') }}</p>
+                                    <p class="mt-1 max-w-sm text-sm text-muted">{{ __('Run cleanup, then compare edges, labels, connectors, and defects before choosing what the listing should use.') }}</p>
+                                </div>
+                            @endif
+                        </section>
+                    </div>
+
+                    @if ($reviewCleanedAsset)
+                        <p class="text-xs text-muted">
+                            {{ __('Cleaned :time via :provider. Original stays available; choosing a version only changes what marketplace listings use.', [
+                                'time' => $reviewCleanedAt ? \Illuminate\Support\Carbon::parse($reviewCleanedAt)->diffForHumans() : __('recently'),
+                                'provider' => $reviewCleanProvider,
+                            ]) }}
+                        </p>
+                    @endif
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-3 border-t border-border-default px-4 py-3 sm:px-5">
+                    <div class="flex items-center gap-2">
+                        <x-ui.button type="button" variant="ghost" size="sm" wire:click="previousPhotoReview">
+                            <x-icon name="heroicon-o-chevron-left" class="h-4 w-4" />
+                            {{ __('Previous') }}
+                        </x-ui.button>
+                        <x-ui.button type="button" variant="ghost" size="sm" wire:click="nextPhotoReview">
+                            {{ __('Next') }}
+                            <x-icon name="heroicon-o-chevron-right" class="h-4 w-4" />
+                        </x-ui.button>
+                    </div>
+
+                    @if ($this->canEdit())
+                        <div class="flex flex-wrap items-center justify-end gap-2">
+                            @if ($reviewCleanedAsset)
+                                <x-ui.button type="button" variant="ghost" size="sm" wire:click="runPhotoCleanup({{ $photoReviewPhoto->id }})" wire:loading.attr="disabled" wire:target="runPhotoCleanup({{ $photoReviewPhoto->id }})">
+                                    <x-icon name="heroicon-o-arrow-path" class="h-4 w-4" />
+                                    {{ __('Retry cleanup') }}
+                                </x-ui.button>
+
+                                @if ($photoReviewPhoto->use_cleaned_photo)
+                                    <x-ui.button type="button" variant="outline" size="sm" wire:click="revertCleanedPhoto({{ $photoReviewPhoto->id }})" wire:loading.attr="disabled" wire:target="revertCleanedPhoto({{ $photoReviewPhoto->id }})">
+                                        <x-icon name="heroicon-o-arrow-uturn-left" class="h-4 w-4" />
+                                        {{ __('Use original') }}
+                                    </x-ui.button>
+                                @else
+                                    <x-ui.button type="button" variant="primary" size="sm" wire:click="acceptCleanedPhoto({{ $photoReviewPhoto->id }})" wire:loading.attr="disabled" wire:target="acceptCleanedPhoto({{ $photoReviewPhoto->id }})">
+                                        <x-icon name="heroicon-o-check" class="h-4 w-4" />
+                                        {{ __('Use cleaned') }}
+                                    </x-ui.button>
+                                @endif
+                            @else
+                                <x-ui.button type="button" variant="primary" size="sm" wire:click="runPhotoCleanup({{ $photoReviewPhoto->id }})" wire:loading.attr="disabled" wire:target="runPhotoCleanup({{ $photoReviewPhoto->id }})">
+                                    <x-icon name="heroicon-o-sparkles" class="h-4 w-4" />
+                                    {{ __('Clean photo') }}
+                                </x-ui.button>
+                            @endif
+                        </div>
+                    @endif
+                </div>
+            </div>
+        </x-ui.modal>
+    @endif
 </div>

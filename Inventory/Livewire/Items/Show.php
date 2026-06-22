@@ -57,6 +57,10 @@ class Show extends Component
      */
     public array $photoFiles = [];
 
+    public bool $photoReviewModalOpen = false;
+
+    public ?int $photoReviewPhotoId = null;
+
     public ?string $currencyCode = '';
 
     public function mount(Item $item): void
@@ -287,9 +291,62 @@ class Show extends Component
 
         $items->deletePhoto($photo);
 
+        if ($this->photoReviewPhotoId === $photoId) {
+            $this->closePhotoReview();
+        }
+
         $this->item->load(self::PHOTO_RELATIONS);
         $this->refreshAllChannelReadiness();
         $this->notify(__('Photo deleted.'));
+    }
+
+    public function openPhotoReview(int $photoId): void
+    {
+        $this->item->loadMissing(self::PHOTO_RELATIONS);
+
+        $photo = $this->item->photos->firstWhere('id', $photoId);
+
+        if ($photo instanceof ItemPhoto) {
+            $this->photoReviewPhotoId = $photo->id;
+            $this->photoReviewModalOpen = true;
+        }
+    }
+
+    public function openFirstCleanedPhotoReview(): void
+    {
+        $this->item->loadMissing(self::PHOTO_RELATIONS);
+
+        $photo = $this->item->photos
+            ->first(fn (ItemPhoto $photo): bool => $photo->cleanedAsset instanceof MediaAsset && ! $photo->use_cleaned_photo)
+            ?? $this->item->photos->first(fn (ItemPhoto $photo): bool => $photo->cleanedAsset instanceof MediaAsset);
+
+        if ($photo instanceof ItemPhoto) {
+            $this->photoReviewPhotoId = $photo->id;
+            $this->photoReviewModalOpen = true;
+        }
+    }
+
+    public function closePhotoReview(): void
+    {
+        $this->photoReviewModalOpen = false;
+        $this->photoReviewPhotoId = null;
+    }
+
+    public function updatedPhotoReviewModalOpen(bool $isOpen): void
+    {
+        if (! $isOpen) {
+            $this->photoReviewPhotoId = null;
+        }
+    }
+
+    public function previousPhotoReview(): void
+    {
+        $this->movePhotoReview(-1);
+    }
+
+    public function nextPhotoReview(): void
+    {
+        $this->movePhotoReview(1);
     }
 
     /**
@@ -310,6 +367,8 @@ class Show extends Component
 
         try {
             $items->cleanPhoto($photo, $this->item->company_id);
+            $this->photoReviewPhotoId = $photo->id;
+            $this->photoReviewModalOpen = true;
             $this->notify(__('Photo cleaned. Review the result before using it on a listing.'));
         } catch (PhotoCleanupException $exception) {
             $this->notifyError($exception->getMessage());
@@ -365,7 +424,7 @@ class Show extends Component
             return;
         }
 
-        $this->notify(trans_choice(':count photo cleaned.|:count photos cleaned.', $cleaned, ['count' => $cleaned]));
+        $this->notify(trans_choice(':count photo cleaned. Review cleaned photos to choose what listings use.|:count photos cleaned. Review cleaned photos to choose what listings use.', $cleaned, ['count' => $cleaned]));
     }
 
     /**
@@ -580,6 +639,8 @@ class Show extends Component
             'canBootstrapFitmentFromAttributes' => $this->canBootstrapFitmentFromAttributes(),
             'channelRows' => $this->channelRows(app(MarketplaceChannelRegistry::class)),
             'extensionReadinessPanels' => app(CommercePluginRegistry::class)->itemReadinessPanels($this->item),
+            'photoReviewPhoto' => $this->photoReviewModalOpen ? $this->photoReviewPhoto() : null,
+            'photoReviewPosition' => $this->photoReviewPosition(),
         ]);
     }
 
@@ -719,6 +780,54 @@ class Show extends Component
     private function routeUrl(mixed $routeName): ?string
     {
         return is_string($routeName) && Route::has($routeName) ? route($routeName) : null;
+    }
+
+    private function movePhotoReview(int $direction): void
+    {
+        $this->item->loadMissing(self::PHOTO_RELATIONS);
+
+        $photoIds = $this->item->photos->pluck('id')->values()->all();
+        $photoCount = count($photoIds);
+
+        if ($photoCount === 0) {
+            $this->closePhotoReview();
+
+            return;
+        }
+
+        $currentIndex = array_search($this->photoReviewPhotoId, $photoIds, true);
+        $currentIndex = is_int($currentIndex) ? $currentIndex : 0;
+        $nextIndex = ($currentIndex + $direction + $photoCount) % $photoCount;
+
+        $this->photoReviewPhotoId = (int) $photoIds[$nextIndex];
+        $this->photoReviewModalOpen = true;
+    }
+
+    private function photoReviewPhoto(): ?ItemPhoto
+    {
+        if ($this->photoReviewPhotoId === null) {
+            return null;
+        }
+
+        $this->item->loadMissing(self::PHOTO_RELATIONS);
+        $photo = $this->item->photos->firstWhere('id', $this->photoReviewPhotoId);
+
+        return $photo instanceof ItemPhoto ? $photo : null;
+    }
+
+    /**
+     * @return array{current: int, total: int}
+     */
+    private function photoReviewPosition(): array
+    {
+        $this->item->loadMissing(self::PHOTO_RELATIONS);
+        $photoIds = $this->item->photos->pluck('id')->values();
+        $index = $photoIds->search($this->photoReviewPhotoId, true);
+
+        return [
+            'current' => is_int($index) ? $index + 1 : 0,
+            'total' => $photoIds->count(),
+        ];
     }
 
     /**

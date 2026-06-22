@@ -352,6 +352,65 @@ test('runPhotoCleanup creates a background_removed derivative without switching 
     Storage::disk('local')->assertExists($photo->cleanedAsset->storage_key);
 });
 
+test('photo review opens from a photo and navigates the item photo set', function (): void {
+    Storage::fake('local');
+
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $item = Item::factory()->create(['company_id' => $user->company_id]);
+    $first = createInventoryItemPhoto($item, 'FIRST-JPEG-BYTES', 0);
+    $second = createInventoryItemPhoto($item, 'SECOND-JPEG-BYTES', 1);
+    backgroundRemovedDerivative($second->mediaAsset);
+
+    Livewire::test(Show::class, ['item' => $item->fresh()])
+        ->assertSet('photoReviewPhotoId', null)
+        ->assertSet('photoReviewModalOpen', false)
+        ->call('openPhotoReview', $first->id)
+        ->assertSet('photoReviewPhotoId', $first->id)
+        ->assertSet('photoReviewModalOpen', true)
+        ->call('nextPhotoReview')
+        ->assertSet('photoReviewPhotoId', $second->id)
+        ->call('previousPhotoReview')
+        ->assertSet('photoReviewPhotoId', $first->id)
+        ->call('openFirstCleanedPhotoReview')
+        ->assertSet('photoReviewPhotoId', $second->id)
+        ->call('closePhotoReview')
+        ->assertSet('photoReviewPhotoId', null)
+        ->assertSet('photoReviewModalOpen', false);
+});
+
+test('single photo cleanup opens review while batch cleanup stays non-interruptive', function (): void {
+    Storage::fake('local');
+
+    $user = createAdminUser();
+    configurePhotoRoom(companyId: $user->company_id);
+
+    Http::fake([
+        'https://sdk.photoroom.com/*' => Http::response('CLEANED-PNG-BYTES', 200),
+    ]);
+
+    $this->actingAs($user);
+
+    $item = Item::factory()->create(['company_id' => $user->company_id]);
+    $first = createInventoryItemPhoto($item, 'FIRST-JPEG-BYTES', 0);
+    $second = createInventoryItemPhoto($item, 'SECOND-JPEG-BYTES', 1);
+
+    Livewire::test(Show::class, ['item' => $item->fresh()])
+        ->call('runPhotoCleanup', $first->id)
+        ->assertSet('photoReviewPhotoId', $first->id)
+        ->assertSet('photoReviewModalOpen', true)
+        ->call('closePhotoReview')
+        ->assertSet('photoReviewPhotoId', null)
+        ->assertSet('photoReviewModalOpen', false)
+        ->call('runPhotoCleanupBatch')
+        ->assertSet('photoReviewPhotoId', null)
+        ->assertSet('photoReviewModalOpen', false);
+
+    expect($first->fresh('cleanedAsset')->cleanedAsset)->toBeInstanceOf(MediaAsset::class)
+        ->and($second->fresh('cleanedAsset')->cleanedAsset)->toBeInstanceOf(MediaAsset::class);
+});
+
 test('runPhotoCleanup surfaces a flash error when PhotoRoom is not configured', function (): void {
     Storage::fake('local');
 
