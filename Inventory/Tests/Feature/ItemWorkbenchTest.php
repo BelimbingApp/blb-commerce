@@ -463,13 +463,18 @@ test('a cleaned photo can be accepted and reverted for marketplace listings', fu
     $photo = createInventoryItemPhoto($item);
     backgroundRemovedDerivative($photo->mediaAsset);
 
-    Livewire::test(Show::class, ['item' => $item])
-        ->call('acceptCleanedPhoto', $photo->id);
+    $component = Livewire::test(Show::class, ['item' => $item])
+        ->call('openPhotoReview', $photo->id)
+        ->call('acceptCleanedPhoto', $photo->id)
+        ->assertSet('photoReviewModalOpen', true)
+        ->assertSet('photoReviewPhotoId', $photo->id);
 
     expect($photo->refresh()->use_cleaned_photo)->toBeTrue();
 
-    Livewire::test(Show::class, ['item' => $item->fresh()])
-        ->call('revertCleanedPhoto', $photo->id);
+    $component
+        ->call('revertCleanedPhoto', $photo->id)
+        ->assertSet('photoReviewModalOpen', true)
+        ->assertSet('photoReviewPhotoId', $photo->id);
 
     expect($photo->refresh()->use_cleaned_photo)->toBeFalse();
 });

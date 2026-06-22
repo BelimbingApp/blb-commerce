@@ -1064,6 +1064,8 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
                 ? (data_get($reviewCleanedAsset->metadata, 'provider_label')
                     ?: \Illuminate\Support\Str::headline((string) data_get($reviewCleanedAsset->metadata, 'provider', __('cleanup provider'))))
                 : null;
+            $originalSelected = ! $photoReviewPhoto->use_cleaned_photo || ! $reviewCleanedAsset;
+            $cleanedSelected = $photoReviewPhoto->use_cleaned_photo && $reviewCleanedAsset;
         @endphp
 
         <x-ui.modal
@@ -1133,14 +1135,23 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
 
                     <div class="grid gap-4 lg:grid-cols-2">
                         <section class="space-y-2">
-                            <div class="flex items-center justify-between gap-2">
-                                <h3 class="text-sm font-semibold text-ink">{{ __('Original') }}</h3>
-                                @if (! $photoReviewPhoto->use_cleaned_photo || ! $reviewCleanedAsset)
-                                    <x-ui.badge variant="success">{{ __('Listing uses this') }}</x-ui.badge>
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div class="flex items-center gap-2">
+                                    <h3 class="text-sm font-semibold text-ink">{{ __('Original') }}</h3>
+                                    @if ($originalSelected)
+                                        <x-ui.badge variant="success">{{ __('Selected for listing') }}</x-ui.badge>
+                                    @endif
+                                </div>
+
+                                @if ($this->canEdit() && $reviewCleanedAsset && ! $originalSelected)
+                                    <x-ui.button type="button" variant="outline" size="sm" wire:click="revertCleanedPhoto({{ $photoReviewPhoto->id }})" wire:loading.attr="disabled" wire:target="revertCleanedPhoto({{ $photoReviewPhoto->id }})">
+                                        <x-icon name="heroicon-o-check" class="h-3.5 w-3.5" />
+                                        {{ __('Use this image') }}
+                                    </x-ui.button>
                                 @endif
                             </div>
 
-                            <div class="flex min-h-[22rem] items-center justify-center overflow-auto rounded-xl border border-border-default p-3" :class="panelClass()" :style="panelStyle()">
+                            <div class="flex min-h-[22rem] items-center justify-center overflow-auto rounded-xl border p-3 {{ $originalSelected ? 'border-accent ring-2 ring-accent/20' : 'border-border-default' }}" :class="panelClass()" :style="panelStyle()">
                                 <img
                                     src="{{ $reviewOriginalAsset->displayUrl() }}"
                                     alt="{{ __('Original photo: :filename', ['filename' => $reviewFilename]) }}"
@@ -1152,17 +1163,26 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
                         </section>
 
                         <section class="space-y-2">
-                            <div class="flex items-center justify-between gap-2">
-                                <h3 class="text-sm font-semibold text-ink">{{ __('Cleaned') }}</h3>
-                                @if ($photoReviewPhoto->use_cleaned_photo && $reviewCleanedAsset)
-                                    <x-ui.badge variant="success">{{ __('Listing uses this') }}</x-ui.badge>
-                                @elseif ($reviewCleanedAsset)
-                                    <x-ui.badge>{{ __('Available') }}</x-ui.badge>
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <div class="flex items-center gap-2">
+                                    <h3 class="text-sm font-semibold text-ink">{{ __('Cleaned') }}</h3>
+                                    @if ($cleanedSelected)
+                                        <x-ui.badge variant="success">{{ __('Selected for listing') }}</x-ui.badge>
+                                    @elseif ($reviewCleanedAsset)
+                                        <x-ui.badge>{{ __('Available') }}</x-ui.badge>
+                                    @endif
+                                </div>
+
+                                @if ($this->canEdit() && $reviewCleanedAsset && ! $cleanedSelected)
+                                    <x-ui.button type="button" variant="primary" size="sm" wire:click="acceptCleanedPhoto({{ $photoReviewPhoto->id }})" wire:loading.attr="disabled" wire:target="acceptCleanedPhoto({{ $photoReviewPhoto->id }})">
+                                        <x-icon name="heroicon-o-check" class="h-3.5 w-3.5" />
+                                        {{ __('Use this image') }}
+                                    </x-ui.button>
                                 @endif
                             </div>
 
                             @if ($reviewCleanedAsset)
-                                <div class="flex min-h-[22rem] items-center justify-center overflow-auto rounded-xl border border-border-default p-3" :class="panelClass()" :style="panelStyle()">
+                                <div class="flex min-h-[22rem] items-center justify-center overflow-auto rounded-xl border p-3 {{ $cleanedSelected ? 'border-accent ring-2 ring-accent/20' : 'border-border-default' }}" :class="panelClass()" :style="panelStyle()">
                                     <img
                                         src="{{ $reviewCleanedAsset->displayUrl() }}"
                                         alt="{{ __('Cleaned photo: :filename', ['filename' => $reviewCleanedAsset->original_filename ?? $reviewFilename]) }}"
@@ -1212,18 +1232,6 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
                                     <x-icon name="heroicon-o-arrow-path" class="h-4 w-4" />
                                     {{ __('Retry cleanup') }}
                                 </x-ui.button>
-
-                                @if ($photoReviewPhoto->use_cleaned_photo)
-                                    <x-ui.button type="button" variant="outline" size="sm" wire:click="revertCleanedPhoto({{ $photoReviewPhoto->id }})" wire:loading.attr="disabled" wire:target="revertCleanedPhoto({{ $photoReviewPhoto->id }})">
-                                        <x-icon name="heroicon-o-arrow-uturn-left" class="h-4 w-4" />
-                                        {{ __('Use original') }}
-                                    </x-ui.button>
-                                @else
-                                    <x-ui.button type="button" variant="primary" size="sm" wire:click="acceptCleanedPhoto({{ $photoReviewPhoto->id }})" wire:loading.attr="disabled" wire:target="acceptCleanedPhoto({{ $photoReviewPhoto->id }})">
-                                        <x-icon name="heroicon-o-check" class="h-4 w-4" />
-                                        {{ __('Use cleaned') }}
-                                    </x-ui.button>
-                                @endif
                             @else
                                 <x-ui.button type="button" variant="primary" size="sm" wire:click="runPhotoCleanup({{ $photoReviewPhoto->id }})" wire:loading.attr="disabled" wire:target="runPhotoCleanup({{ $photoReviewPhoto->id }})">
                                     <x-icon name="heroicon-o-sparkles" class="h-4 w-4" />
