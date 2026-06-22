@@ -1105,9 +1105,7 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
 
                     <div class="flex items-center gap-2">
                         @if ($reviewCleanedAsset)
-                            <x-ui.badge :variant="$photoReviewPhoto->use_cleaned_photo ? 'success' : 'default'">
-                                {{ $photoReviewPhoto->use_cleaned_photo ? __('Cleaned in use') : __('Original in use') }}
-                            </x-ui.badge>
+                            <x-ui.badge>{{ __('Original + cleaned') }}</x-ui.badge>
                         @else
                             <x-ui.badge>{{ __('Original only') }}</x-ui.badge>
                         @endif
@@ -1125,7 +1123,47 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
                 </div>
 
                 <div class="space-y-4 overflow-y-auto p-4 sm:p-5">
-                    <div>
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        @if ($reviewCleanedAsset)
+                            <div class="inline-flex rounded-full border border-border-default bg-surface-subtle p-1 text-xs font-medium text-muted">
+                                <button
+                                    type="button"
+                                    aria-pressed="{{ $originalSelected ? 'true' : 'false' }}"
+                                    @if ($this->canEdit() && ! $originalSelected)
+                                        wire:click="revertCleanedPhoto({{ $photoReviewPhoto->id }})"
+                                        wire:loading.attr="disabled"
+                                        wire:target="revertCleanedPhoto({{ $photoReviewPhoto->id }})"
+                                    @else
+                                        disabled
+                                    @endif
+                                    class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 {{ $originalSelected ? 'bg-surface-card text-ink shadow-sm' : ($this->canEdit() ? 'hover:bg-surface-card/70 hover:text-ink' : 'cursor-default') }}"
+                                >
+                                    @if ($originalSelected)
+                                        <x-icon name="heroicon-o-check" class="h-3.5 w-3.5 text-status-success" />
+                                    @endif
+                                    {{ __('Original') }}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    aria-pressed="{{ $cleanedSelected ? 'true' : 'false' }}"
+                                    @if ($this->canEdit() && ! $cleanedSelected)
+                                        wire:click="acceptCleanedPhoto({{ $photoReviewPhoto->id }})"
+                                        wire:loading.attr="disabled"
+                                        wire:target="acceptCleanedPhoto({{ $photoReviewPhoto->id }})"
+                                    @else
+                                        disabled
+                                    @endif
+                                    class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 {{ $cleanedSelected ? 'bg-surface-card text-ink shadow-sm' : ($this->canEdit() ? 'hover:bg-surface-card/70 hover:text-ink' : 'cursor-default') }}"
+                                >
+                                    @if ($cleanedSelected)
+                                        <x-icon name="heroicon-o-check" class="h-3.5 w-3.5 text-status-success" />
+                                    @endif
+                                    {{ __('Cleaned') }}
+                                </button>
+                            </div>
+                        @endif
+
                         <div class="inline-flex rounded-full border border-border-default bg-surface-subtle p-1 text-xs font-medium text-muted">
                             <button type="button" class="rounded-full px-3 py-1" :class="background === 'checker' ? 'bg-surface-card text-ink shadow-sm' : ''" @click="background = 'checker'">{{ __('Checker') }}</button>
                             <button type="button" class="rounded-full px-3 py-1" :class="background === 'light' ? 'bg-surface-card text-ink shadow-sm' : ''" @click="background = 'light'">{{ __('Light') }}</button>
@@ -1135,21 +1173,7 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
 
                     <div class="grid gap-4 lg:grid-cols-2">
                         <section class="space-y-2">
-                            <div class="flex flex-wrap items-center justify-between gap-2">
-                                <div class="flex items-center gap-2">
-                                    <h3 class="text-sm font-semibold text-ink">{{ __('Original') }}</h3>
-                                    @if ($originalSelected)
-                                        <x-ui.badge variant="success">{{ __('Selected for listing') }}</x-ui.badge>
-                                    @endif
-                                </div>
-
-                                @if ($this->canEdit() && $reviewCleanedAsset && ! $originalSelected)
-                                    <x-ui.button type="button" variant="outline" size="sm" wire:click="revertCleanedPhoto({{ $photoReviewPhoto->id }})" wire:loading.attr="disabled" wire:target="revertCleanedPhoto({{ $photoReviewPhoto->id }})">
-                                        <x-icon name="heroicon-o-check" class="h-3.5 w-3.5" />
-                                        {{ __('Use this image') }}
-                                    </x-ui.button>
-                                @endif
-                            </div>
+                            <h3 class="text-sm font-semibold text-ink">{{ __('Original') }}</h3>
 
                             <div class="flex min-h-[22rem] items-center justify-center overflow-auto rounded-xl border p-3 {{ $originalSelected ? 'border-accent ring-2 ring-accent/20' : 'border-border-default' }}" :class="panelClass()" :style="panelStyle()">
                                 <img
@@ -1163,23 +1187,7 @@ use App\Modules\Commerce\Inventory\Models\ItemPhoto;
                         </section>
 
                         <section class="space-y-2">
-                            <div class="flex flex-wrap items-center justify-between gap-2">
-                                <div class="flex items-center gap-2">
-                                    <h3 class="text-sm font-semibold text-ink">{{ __('Cleaned') }}</h3>
-                                    @if ($cleanedSelected)
-                                        <x-ui.badge variant="success">{{ __('Selected for listing') }}</x-ui.badge>
-                                    @elseif ($reviewCleanedAsset)
-                                        <x-ui.badge>{{ __('Available') }}</x-ui.badge>
-                                    @endif
-                                </div>
-
-                                @if ($this->canEdit() && $reviewCleanedAsset && ! $cleanedSelected)
-                                    <x-ui.button type="button" variant="primary" size="sm" wire:click="acceptCleanedPhoto({{ $photoReviewPhoto->id }})" wire:loading.attr="disabled" wire:target="acceptCleanedPhoto({{ $photoReviewPhoto->id }})">
-                                        <x-icon name="heroicon-o-check" class="h-3.5 w-3.5" />
-                                        {{ __('Use this image') }}
-                                    </x-ui.button>
-                                @endif
-                            </div>
+                            <h3 class="text-sm font-semibold text-ink">{{ __('Cleaned') }}</h3>
 
                             @if ($reviewCleanedAsset)
                                 <div class="flex min-h-[22rem] items-center justify-center overflow-auto rounded-xl border p-3 {{ $cleanedSelected ? 'border-accent ring-2 ring-accent/20' : 'border-border-default' }}" :class="panelClass()" :style="panelStyle()">
