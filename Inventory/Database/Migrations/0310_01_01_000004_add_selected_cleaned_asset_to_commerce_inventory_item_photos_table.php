@@ -13,8 +13,11 @@ return new class extends Migration
         Schema::table('commerce_inventory_item_photos', function (Blueprint $table): void {
             $table->foreignId('selected_cleaned_asset_id')
                 ->nullable()
-                ->after('media_asset_id')
-                ->constrained('base_media_assets')
+                ->after('media_asset_id');
+
+            $table->foreign('selected_cleaned_asset_id', 'commerce_item_photos_selected_cleaned_asset_fk')
+                ->references('id')
+                ->on('base_media_assets')
                 ->nullOnDelete();
         });
 
@@ -39,7 +42,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('commerce_inventory_item_photos', function (Blueprint $table): void {
-            $table->dropForeign(['selected_cleaned_asset_id']);
+            $table->dropForeign('commerce_item_photos_selected_cleaned_asset_fk');
             $table->dropColumn('selected_cleaned_asset_id');
         });
     }
