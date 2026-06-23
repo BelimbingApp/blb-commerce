@@ -306,7 +306,7 @@ test('item photos can be uploaded and deleted from the detail page component', f
     Storage::disk('local')->assertMissing($asset->storage_key);
 });
 
-function createInventoryItemPhoto(Item $item, string $bytes = 'ORIGINAL-JPEG-BYTES', int $sortOrder = 0): ItemPhoto
+function createInventoryItemPhoto(Item $item, string $bytes = 'ORIGINAL-JPEG-BYTES', int $sortOrder = 0, bool $selectedForListing = true): ItemPhoto
 {
     $storageKey = 'commerce/inventory/item-photos/'.$item->id.'/photo-'.$sortOrder.'.jpg';
 
@@ -322,6 +322,7 @@ function createInventoryItemPhoto(Item $item, string $bytes = 'ORIGINAL-JPEG-BYT
         'item_id' => $item->id,
         'media_asset_id' => $asset->id,
         'sort_order' => $sortOrder,
+        'selected_for_listing' => $selectedForListing,
     ]);
 }
 
@@ -366,17 +367,21 @@ test('photo review opens from a photo and navigates the item photo set', functio
 
     Livewire::test(Show::class, ['item' => $item->fresh()])
         ->assertSet('photoReviewPhotoId', null)
+        ->assertSet('photoReviewModalOpen', false)
         ->call('openPhotoReview', $first->id)
         ->assertSet('photoReviewPhotoId', $first->id)
+        ->assertSet('photoReviewModalOpen', true)
         ->call('nextPhotoReview')
         ->assertSet('photoReviewPhotoId', $second->id)
         ->call('previousPhotoReview')
         ->assertSet('photoReviewPhotoId', $first->id)
         ->call('openFirstCleanedPhotoReview')
-        ->assertSet('photoReviewPhotoId', $second->id);
+        ->assertSet('photoReviewPhotoId', $second->id)
+        ->call('closePhotoReview')
+        ->assertSet('photoReviewModalOpen', false);
 });
 
-test('single photo cleanup selects the workbench photo while batch cleanup stays non-interruptive', function (): void {
+test('single photo cleanup opens the review modal while batch cleanup stays non-interruptive', function (): void {
     Storage::fake('local');
 
     $user = createAdminUser();
@@ -395,12 +400,47 @@ test('single photo cleanup selects the workbench photo while batch cleanup stays
     Livewire::test(Show::class, ['item' => $item->fresh()])
         ->call('runPhotoCleanup', $first->id)
         ->assertSet('photoReviewPhotoId', $first->id)
+        ->assertSet('photoReviewModalOpen', true)
+        ->call('closePhotoReview')
         ->call('openPhotoReview', $second->id)
         ->call('runPhotoCleanupBatch')
-        ->assertSet('photoReviewPhotoId', $second->id);
+        ->assertSet('photoReviewPhotoId', $second->id)
+        ->assertSet('photoReviewModalOpen', true);
 
     expect($first->fresh('cleanedAsset')->cleanedAsset)->toBeInstanceOf(MediaAsset::class)
         ->and($second->fresh('cleanedAsset')->cleanedAsset)->toBeInstanceOf(MediaAsset::class);
+});
+
+test('item photos can be moved between listing and available rolls and available photos can be deleted', function (): void {
+    Storage::fake('local');
+
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $item = Item::factory()->create(['company_id' => $user->company_id]);
+    $listing = createInventoryItemPhoto($item, 'LISTING-JPEG-BYTES', 0);
+    $available = createInventoryItemPhoto($item, 'AVAILABLE-JPEG-BYTES', 1, selectedForListing: false);
+    $availableAsset = $available->mediaAsset;
+
+    Livewire::test(Show::class, ['item' => $item->fresh()])
+        ->assertSee('Listing photos')
+        ->assertSee('Available photos')
+        ->call('setPhotoListingSelection', $listing->id, false)
+        ->assertHasNoErrors();
+
+    expect($listing->refresh()->selected_for_listing)->toBeFalse();
+
+    Livewire::test(Show::class, ['item' => $item->fresh()])
+        ->call('setPhotoListingSelection', $listing->id, true)
+        ->assertHasNoErrors()
+        ->call('deleteUnselectedPhotos')
+        ->assertHasNoErrors();
+
+    expect($listing->refresh()->selected_for_listing)->toBeTrue()
+        ->and(ItemPhoto::query()->whereKey($available->id)->exists())->toBeFalse()
+        ->and(MediaAsset::query()->whereKey($availableAsset->id)->exists())->toBeFalse();
+
+    Storage::disk('local')->assertMissing($availableAsset->storage_key);
 });
 
 test('runPhotoCleanup surfaces a flash error when PhotoRoom is not configured', function (): void {

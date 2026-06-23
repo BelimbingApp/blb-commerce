@@ -126,6 +126,22 @@ class Item extends Model
     }
 
     /**
+     * Photos that should be published to marketplace listings, preserving the
+     * operator's photo order. Available-but-unselected photos stay on the item
+     * for later cleanup or reference without leaking into listing payloads.
+     *
+     * @return Collection<int, ItemPhoto>
+     */
+    public function listingPhotos(): Collection
+    {
+        $this->loadMissing('photos');
+
+        return $this->photos
+            ->filter(fn (ItemPhoto $photo): bool => $photo->selected_for_listing)
+            ->values();
+    }
+
+    /**
      * @return HasMany<ItemFitment, $this>
      */
     public function fitments(): HasMany

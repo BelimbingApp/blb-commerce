@@ -22,6 +22,8 @@ class EbayListingPayloadBuilder
     {
         $draft->loadMissing([
             'item.photos.mediaAsset',
+            'item.photos.cleanedAsset',
+            'item.photos.selectedCleanedAsset',
             'item.fitments',
             'item.catalogAttributeValues.attribute',
             'listing',
@@ -125,8 +127,8 @@ class EbayListingPayloadBuilder
      */
     private function publicPhotoUrls(ListingDraft $draft): array
     {
-        return $draft->item?->photos
-            ->map(fn ($photo): mixed => $photo->mediaAsset?->metadata['public_url'] ?? null)
+        return $draft->item?->listingPhotos()
+            ->map(fn ($photo): mixed => $photo->displayAsset()?->metadata['public_url'] ?? null)
             ->filter(fn (mixed $url): bool => is_string($url) && str_starts_with($url, 'https://'))
             ->values()
             ->all() ?? [];

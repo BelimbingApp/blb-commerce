@@ -247,6 +247,34 @@ test('eBay listing readiness uses template mapping policies aspects and product 
         ->and($draft->readiness_snapshot['product_references'][0]['external_product_id'])->toBe('1122066940');
 });
 
+test('eBay listing readiness and payload use only listing photos', function (): void {
+    $user = createAdminUser();
+    $item = seedMappedEbayReadinessItem($user->company_id);
+    $selectedPhoto = $item->photos()->firstOrFail();
+    $availableAsset = MediaAsset::query()->create([
+        'disk' => 'local',
+        'storage_key' => 'testing/reference-only.jpg',
+        'original_filename' => 'reference-only.jpg',
+        'mime_type' => 'image/jpeg',
+        'kind' => MediaAsset::KIND_ORIGINAL,
+        'metadata' => ['public_url' => 'https://cdn.example.test/reference-only.jpg'],
+    ]);
+    ItemPhoto::query()->create([
+        'item_id' => $item->id,
+        'media_asset_id' => $availableAsset->id,
+        'sort_order' => 2,
+        'selected_for_listing' => false,
+    ]);
+
+    $draft = app(EbayListingReadinessService::class)->refreshForItem($item->fresh());
+    $payload = app(EbayListingPayloadBuilder::class)->build($draft);
+
+    expect($draft->photo_asset_ids)->toBe([$selectedPhoto->media_asset_id])
+        ->and($draft->readiness_snapshot['facts']['photo_count'])->toBe(1)
+        ->and($draft->readiness_snapshot['facts']['public_photo_count'])->toBe(1)
+        ->and($payload['inventory_item']['product']['imageUrls'])->toBe(['https://cdn.example.test/caliper.jpg']);
+});
+
 test('eBay listing readiness blocks invalid mapped enum values', function (): void {
     $user = createAdminUser();
     $scope = Scope::company($user->company_id);

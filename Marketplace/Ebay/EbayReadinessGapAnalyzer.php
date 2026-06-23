@@ -95,7 +95,9 @@ class EbayReadinessGapAnalyzer
         // Local photos are enough: the push pipeline hosts them on eBay
         // Picture Services itself (EbayPictureService), so hosting is not a
         // readiness gate.
-        if ($item->photos->isEmpty()) {
+        $listingPhotoCount = $item->listingPhotos()->count();
+
+        if ($listingPhotoCount === 0) {
             $blockers[] = $this->gap('photos', __('Add at least one photo.'), 'photos');
         }
 
@@ -110,7 +112,7 @@ class EbayReadinessGapAnalyzer
             }
         }
 
-        if ($item->photos->count() > 0 && $item->photos->count() < 3) {
+        if ($listingPhotoCount > 0 && $listingPhotoCount < 3) {
             $warnings[] = $this->gap('photo_coverage', __('Add more photos when possible: multiple angles, labels, connectors, mounts, and visible defects.'), 'photos');
         }
     }

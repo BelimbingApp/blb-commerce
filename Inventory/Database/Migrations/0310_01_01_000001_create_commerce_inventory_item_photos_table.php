@@ -23,6 +23,7 @@ return new class extends Migration
                 ->nullable();
 
             $table->unsignedInteger('sort_order')->default(0);
+            $table->boolean('selected_for_listing')->default(true);
             $table->boolean('use_cleaned_photo')->default(false);
 
             $table->timestamps();

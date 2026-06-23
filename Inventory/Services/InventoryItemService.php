@@ -69,6 +69,25 @@ class InventoryItemService
         });
     }
 
+    public function setPhotoSelectedForListing(ItemPhoto $photo, bool $selectedForListing): void
+    {
+        $photo->update(['selected_for_listing' => $selectedForListing]);
+    }
+
+    public function deleteUnselectedPhotos(Item $item): int
+    {
+        $deleted = 0;
+
+        $item->loadMissing('photos.mediaAsset');
+
+        foreach ($item->photos->reject(fn (ItemPhoto $photo): bool => $photo->selected_for_listing) as $photo) {
+            $this->deletePhoto($photo);
+            $deleted++;
+        }
+
+        return $deleted;
+    }
+
     /**
      * Delete cleaned alternates that are not currently selected for listings.
      * The original stays because it is the source image for future operations.

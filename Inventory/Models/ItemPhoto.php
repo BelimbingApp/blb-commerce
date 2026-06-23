@@ -22,6 +22,7 @@ use Illuminate\Support\Carbon;
  * @property int $media_asset_id
  * @property int|null $selected_cleaned_asset_id
  * @property int $sort_order
+ * @property bool $selected_for_listing
  * @property bool $use_cleaned_photo
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -43,6 +44,7 @@ class ItemPhoto extends Model
         'media_asset_id',
         'selected_cleaned_asset_id',
         'sort_order',
+        'selected_for_listing',
         'use_cleaned_photo',
     ];
 
@@ -52,6 +54,7 @@ class ItemPhoto extends Model
     protected function casts(): array
     {
         return [
+            'selected_for_listing' => 'boolean',
             'use_cleaned_photo' => 'boolean',
         ];
     }

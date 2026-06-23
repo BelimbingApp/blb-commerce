@@ -59,6 +59,8 @@ class Show extends Component
      */
     public array $photoFiles = [];
 
+    public bool $photoReviewModalOpen = false;
+
     public ?int $photoReviewPhotoId = null;
 
     public ?string $currencyCode = '';
@@ -294,10 +296,58 @@ class Show extends Component
         $this->item->load(self::PHOTO_RELATIONS);
         if ($this->photoReviewPhotoId === $photoId) {
             $this->photoReviewPhotoId = $this->item->photos->first()?->id;
+            $this->photoReviewModalOpen = $this->photoReviewPhotoId !== null && $this->photoReviewModalOpen;
         }
 
         $this->refreshAllChannelReadiness();
         $this->notify(__('Photo deleted.'));
+    }
+
+    public function setPhotoListingSelection(int $photoId, bool $selectedForListing, InventoryItemService $items): void
+    {
+        $this->authorizeUpdate();
+
+        $this->item->loadMissing(self::PHOTO_RELATIONS);
+
+        $photo = $this->item->photos->firstWhere('id', $photoId);
+        if (! $photo instanceof ItemPhoto) {
+            return;
+        }
+
+        $items->setPhotoSelectedForListing($photo, $selectedForListing);
+
+        $this->item->load(self::PHOTO_RELATIONS);
+        $this->refreshAllChannelReadiness();
+        $this->notify($selectedForListing ? __('Photo added to listing.') : __('Photo moved to available.'));
+    }
+
+    public function deleteUnselectedPhotos(InventoryItemService $items): void
+    {
+        $this->authorizeUpdate();
+
+        $this->item->loadMissing(self::PHOTO_RELATIONS);
+
+        $currentPhotoWasUnselected = $this->photoReviewPhotoId !== null
+            && $this->item->photos->contains(fn (ItemPhoto $photo): bool => $photo->id === $this->photoReviewPhotoId && ! $photo->selected_for_listing);
+
+        $deleted = $items->deleteUnselectedPhotos($this->item);
+
+        $this->item->load(self::PHOTO_RELATIONS);
+
+        if ($currentPhotoWasUnselected) {
+            $this->photoReviewPhotoId = $this->item->photos->first()?->id;
+            $this->photoReviewModalOpen = $this->photoReviewPhotoId !== null && $this->photoReviewModalOpen;
+        }
+
+        $this->refreshAllChannelReadiness();
+
+        if ($deleted === 0) {
+            $this->notify(__('No available photos to delete.'));
+
+            return;
+        }
+
+        $this->notify(trans_choice(':count available photo deleted.|:count available photos deleted.', $deleted, ['count' => $deleted]));
     }
 
     public function deleteUnselectedCleanedVersions(int $photoId, InventoryItemService $items): void
@@ -333,7 +383,13 @@ class Show extends Component
 
         if ($photo instanceof ItemPhoto) {
             $this->photoReviewPhotoId = $photo->id;
+            $this->photoReviewModalOpen = true;
         }
+    }
+
+    public function closePhotoReview(): void
+    {
+        $this->photoReviewModalOpen = false;
     }
 
     public function openFirstCleanedPhotoReview(): void
@@ -346,6 +402,7 @@ class Show extends Component
 
         if ($photo instanceof ItemPhoto) {
             $this->photoReviewPhotoId = $photo->id;
+            $this->photoReviewModalOpen = true;
         }
     }
 
@@ -398,6 +455,7 @@ class Show extends Component
         try {
             $items->cleanPhoto($photo, $this->item->company_id);
             $this->photoReviewPhotoId = $photo->id;
+            $this->photoReviewModalOpen = true;
             $this->notify(__('Photo cleaned. Review the result in the Photos tab before using it on a listing.'));
         } catch (PhotoCleanupException $exception) {
             $this->notifyError($exception->getMessage());

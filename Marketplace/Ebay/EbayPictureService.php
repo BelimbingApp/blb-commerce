@@ -52,7 +52,7 @@ class EbayPictureService
         $accessToken = null;
         $urls = [];
 
-        foreach ($item->photos->sortBy('sort_order')->values() as $photo) {
+        foreach ($item->listingPhotos()->sortBy('sort_order')->values() as $photo) {
             $asset = $photo->displayAsset();
 
             if (! $asset instanceof MediaAsset) {

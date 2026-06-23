@@ -45,6 +45,8 @@ class EbayListingReadinessService
         $item->loadMissing([
             'productTemplate',
             'photos.mediaAsset',
+            'photos.cleanedAsset',
+            'photos.selectedCleanedAsset',
             'fitments',
             'catalogAttributeValues.attribute',
         ]);
@@ -73,6 +75,7 @@ class EbayListingReadinessService
         $aspectFacts = $this->aspectFacts($item, $metadataMarketplaceId, $categoryId, $categoryTreeId, $productReferences->all(), $existingDraft);
         $identifierAlignment = $this->identifierAlignment($aspectFacts);
         $liveDescription = $existingDraft?->listing?->marketplaceDescriptionBody();
+        $listingPhotos = $item->listingPhotos();
 
         [$blockers, $warnings] = $this->gapAnalyzer->analyze(
             $item,
@@ -110,7 +113,11 @@ class EbayListingReadinessService
                 'mapped_aspects' => $mappedAspects,
                 'policy_ids' => $policyIds,
                 'merchant_location_key' => $this->merchantLocationKey($companyId),
-                'photo_asset_ids' => $item->photos->pluck('media_asset_id')->values()->all(),
+                'photo_asset_ids' => $listingPhotos
+                    ->map(fn ($photo): ?int => $photo->displayAsset()?->id)
+                    ->filter()
+                    ->values()
+                    ->all(),
                 'readiness_status' => $readinessStatus,
                 'readiness_snapshot' => [
                     'blockers' => $blockers,
@@ -123,7 +130,7 @@ class EbayListingReadinessService
                         'category_tree_id' => $categoryTreeId,
                         'category_id' => $categoryId,
                         'fitment_count' => $item->fitments->count(),
-                        'photo_count' => $item->photos->count(),
+                        'photo_count' => $listingPhotos->count(),
                         'mapped_aspect_count' => count($mappedAspects),
                         'product_reference_count' => $productReferences->count(),
                         'public_photo_count' => $this->publicPhotoUrls($item)->count(),
@@ -333,8 +340,8 @@ class EbayListingReadinessService
 
     private function publicPhotoUrls(Item $item): Collection
     {
-        return $item->photos
-            ->map(fn ($photo): mixed => $photo->mediaAsset?->metadata['public_url'] ?? null)
+        return $item->listingPhotos()
+            ->map(fn ($photo): mixed => $photo->displayAsset()?->metadata['public_url'] ?? null)
             ->filter(fn (mixed $url): bool => is_string($url) && str_starts_with($url, 'https://'))
             ->values();
     }

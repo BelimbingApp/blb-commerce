@@ -103,6 +103,34 @@ test('photos that already have a hosted URL are reused without re-uploading', fu
     Http::assertNothingSent();
 });
 
+test('available photos are not uploaded to eBay Picture Services', function (): void {
+    $user = createAdminUser();
+    $item = createPictureServiceItem($user->company_id, 'https://i.ebayimg.com/selected/photo.jpg');
+
+    Storage::disk('local')->put('testing/extra.jpg', 'available-jpeg-bytes');
+    $availableAsset = MediaAsset::query()->create([
+        'disk' => 'local',
+        'storage_key' => 'testing/extra.jpg',
+        'original_filename' => 'extra.jpg',
+        'mime_type' => 'image/jpeg',
+        'kind' => MediaAsset::KIND_ORIGINAL,
+    ]);
+    ItemPhoto::query()->create([
+        'item_id' => $item->id,
+        'media_asset_id' => $availableAsset->id,
+        'sort_order' => 2,
+        'selected_for_listing' => false,
+    ]);
+
+    Http::fake();
+
+    $urls = app(EbayPictureService::class)->ensureHostedPhotos($item->fresh());
+
+    expect($urls)->toBe(['https://i.ebayimg.com/selected/photo.jpg'])
+        ->and($availableAsset->fresh()->metadata)->toBeNull();
+    Http::assertNothingSent();
+});
+
 test('an eBay picture upload rejection surfaces as a marketplace exception', function (): void {
     $user = createAdminUser();
     $item = createPictureServiceItem($user->company_id);
