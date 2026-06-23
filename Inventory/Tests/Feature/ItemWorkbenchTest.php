@@ -545,6 +545,36 @@ test('photo cleanup keeps one cleaned derivative per provider', function (): voi
         ->and($photo->fresh()->use_cleaned_photo)->toBeFalse();
 });
 
+test('unselected cleaned versions can be deleted without deleting the listing image', function (): void {
+    Storage::fake('local');
+
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $item = Item::factory()->create(['company_id' => $user->company_id]);
+    $photo = createInventoryItemPhoto($item);
+    $photoRoom = backgroundRemovedDerivative($photo->mediaAsset, 'PHOTOROOM-PNG-BYTES');
+    $poof = backgroundRemovedDerivative($photo->mediaAsset, 'POOF-PNG-BYTES', 'poof', 'Poof');
+
+    Livewire::test(Show::class, ['item' => $item->fresh()])
+        ->call('openPhotoReview', $photo->id)
+        ->call('acceptCleanedPhoto', $photo->id, $photoRoom->id)
+        ->call('deleteUnselectedCleanedVersions', $photo->id)
+        ->assertSet('photoReviewModalOpen', true)
+        ->assertSet('photoReviewPhotoId', $photo->id);
+
+    $photo->refresh();
+
+    expect(MediaAsset::query()->whereKey($photoRoom->id)->exists())->toBeTrue()
+        ->and(MediaAsset::query()->whereKey($poof->id)->exists())->toBeFalse()
+        ->and($photo->selected_cleaned_asset_id)->toBe($photoRoom->id)
+        ->and($photo->displayAsset()?->id)->toBe($photoRoom->id)
+        ->and($photo->fresh('cleanedAssets')->cleanedAssets)->toHaveCount(1);
+
+    Storage::disk('local')->assertExists($photoRoom->storage_key);
+    Storage::disk('local')->assertMissing($poof->storage_key);
+});
+
 test('photo cleanup uses the visible ready provider when the saved provider is not ready', function (): void {
     Storage::fake('local');
 

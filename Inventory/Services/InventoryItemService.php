@@ -70,6 +70,31 @@ class InventoryItemService
     }
 
     /**
+     * Delete cleaned alternates that are not currently selected for listings.
+     * The original stays because it is the source image for future operations.
+     */
+    public function deleteUnselectedCleanedAssets(ItemPhoto $photo): int
+    {
+        $photo->loadMissing('cleanedAssets', 'selectedCleanedAsset', 'cleanedAsset');
+
+        $selectedCleanedAsset = $photo->use_cleaned_photo ? $photo->activeCleanedAsset() : null;
+        $selectedCleanedAssetId = $selectedCleanedAsset?->id;
+        $deleted = 0;
+
+        foreach ($photo->cleanedAssets as $cleanedAsset) {
+            if ($selectedCleanedAssetId !== null && $cleanedAsset->id === $selectedCleanedAssetId) {
+                continue;
+            }
+
+            $cleanedAsset->loadMissing('derivatives');
+            $this->mediaAssets->delete($cleanedAsset);
+            $deleted++;
+        }
+
+        return $deleted;
+    }
+
+    /**
      * Run background removal on this photo's original asset, creating or
      * replacing its `background_removed` derivative. The original asset is
      * never modified. The caller passes the owning company so the service

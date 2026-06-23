@@ -302,6 +302,31 @@ class Show extends Component
         $this->notify(__('Photo deleted.'));
     }
 
+    public function deleteUnselectedCleanedVersions(int $photoId, InventoryItemService $items): void
+    {
+        $this->authorizeUpdate();
+
+        $this->item->loadMissing(self::PHOTO_RELATIONS);
+
+        $photo = $this->item->photos->firstWhere('id', $photoId);
+        if (! $photo instanceof ItemPhoto) {
+            return;
+        }
+
+        $deleted = $items->deleteUnselectedCleanedAssets($photo);
+
+        $this->item->load(self::PHOTO_RELATIONS);
+        $this->refreshAllChannelReadiness();
+
+        if ($deleted === 0) {
+            $this->notify(__('No alternate cleaned versions to delete.'));
+
+            return;
+        }
+
+        $this->notify(trans_choice(':count alternate cleaned version deleted.|:count alternate cleaned versions deleted.', $deleted, ['count' => $deleted]));
+    }
+
     public function openPhotoReview(int $photoId): void
     {
         $this->item->loadMissing(self::PHOTO_RELATIONS);
