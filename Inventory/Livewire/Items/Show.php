@@ -59,8 +59,6 @@ class Show extends Component
      */
     public array $photoFiles = [];
 
-    public bool $photoReviewModalOpen = false;
-
     public ?int $photoReviewPhotoId = null;
 
     public ?string $currencyCode = '';
@@ -293,11 +291,11 @@ class Show extends Component
 
         $items->deletePhoto($photo);
 
+        $this->item->load(self::PHOTO_RELATIONS);
         if ($this->photoReviewPhotoId === $photoId) {
-            $this->closePhotoReview();
+            $this->photoReviewPhotoId = $this->item->photos->first()?->id;
         }
 
-        $this->item->load(self::PHOTO_RELATIONS);
         $this->refreshAllChannelReadiness();
         $this->notify(__('Photo deleted.'));
     }
@@ -335,7 +333,6 @@ class Show extends Component
 
         if ($photo instanceof ItemPhoto) {
             $this->photoReviewPhotoId = $photo->id;
-            $this->photoReviewModalOpen = true;
         }
     }
 
@@ -349,20 +346,6 @@ class Show extends Component
 
         if ($photo instanceof ItemPhoto) {
             $this->photoReviewPhotoId = $photo->id;
-            $this->photoReviewModalOpen = true;
-        }
-    }
-
-    public function closePhotoReview(): void
-    {
-        $this->photoReviewModalOpen = false;
-        $this->photoReviewPhotoId = null;
-    }
-
-    public function updatedPhotoReviewModalOpen(bool $isOpen): void
-    {
-        if (! $isOpen) {
-            $this->photoReviewPhotoId = null;
         }
     }
 
@@ -415,8 +398,7 @@ class Show extends Component
         try {
             $items->cleanPhoto($photo, $this->item->company_id);
             $this->photoReviewPhotoId = $photo->id;
-            $this->photoReviewModalOpen = true;
-            $this->notify(__('Photo cleaned. Review the result before using it on a listing.'));
+            $this->notify(__('Photo cleaned. Review the result in the Photos tab before using it on a listing.'));
         } catch (PhotoCleanupException $exception) {
             $this->notifyError($exception->getMessage());
         }
@@ -703,7 +685,7 @@ class Show extends Component
             'canBootstrapFitmentFromAttributes' => $this->canBootstrapFitmentFromAttributes(),
             'channelRows' => $this->channelRows(app(MarketplaceChannelRegistry::class)),
             'extensionReadinessPanels' => app(CommercePluginRegistry::class)->itemReadinessPanels($this->item),
-            'photoReviewPhoto' => $this->photoReviewModalOpen ? $this->photoReviewPhoto() : null,
+            'photoReviewPhoto' => $this->photoReviewPhoto(),
             'photoReviewPosition' => $this->photoReviewPosition(),
             'photoCleanupProviders' => $photoCleanupProviders,
             'activePhotoCleanupProviderKey' => $activePhotoCleanupProviderKey,
@@ -856,7 +838,7 @@ class Show extends Component
         $photoCount = count($photoIds);
 
         if ($photoCount === 0) {
-            $this->closePhotoReview();
+            $this->photoReviewPhotoId = null;
 
             return;
         }
@@ -866,19 +848,23 @@ class Show extends Component
         $nextIndex = ($currentIndex + $direction + $photoCount) % $photoCount;
 
         $this->photoReviewPhotoId = (int) $photoIds[$nextIndex];
-        $this->photoReviewModalOpen = true;
     }
 
     private function photoReviewPhoto(): ?ItemPhoto
     {
-        if ($this->photoReviewPhotoId === null) {
-            return null;
+        $this->item->loadMissing(self::PHOTO_RELATIONS);
+
+        $photo = $this->photoReviewPhotoId === null
+            ? $this->item->photos->first()
+            : $this->item->photos->firstWhere('id', $this->photoReviewPhotoId);
+
+        if ($photo instanceof ItemPhoto) {
+            return $photo;
         }
 
-        $this->item->loadMissing(self::PHOTO_RELATIONS);
-        $photo = $this->item->photos->firstWhere('id', $this->photoReviewPhotoId);
+        $fallback = $this->item->photos->first();
 
-        return $photo instanceof ItemPhoto ? $photo : null;
+        return $fallback instanceof ItemPhoto ? $fallback : null;
     }
 
     /**
@@ -888,7 +874,7 @@ class Show extends Component
     {
         $this->item->loadMissing(self::PHOTO_RELATIONS);
         $photoIds = $this->item->photos->pluck('id')->values();
-        $index = $photoIds->search($this->photoReviewPhotoId, true);
+        $index = $photoIds->search($this->photoReviewPhoto()?->id, true);
 
         return [
             'current' => is_int($index) ? $index + 1 : 0,

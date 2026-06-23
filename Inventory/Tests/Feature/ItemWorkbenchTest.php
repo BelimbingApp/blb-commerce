@@ -366,22 +366,17 @@ test('photo review opens from a photo and navigates the item photo set', functio
 
     Livewire::test(Show::class, ['item' => $item->fresh()])
         ->assertSet('photoReviewPhotoId', null)
-        ->assertSet('photoReviewModalOpen', false)
         ->call('openPhotoReview', $first->id)
         ->assertSet('photoReviewPhotoId', $first->id)
-        ->assertSet('photoReviewModalOpen', true)
         ->call('nextPhotoReview')
         ->assertSet('photoReviewPhotoId', $second->id)
         ->call('previousPhotoReview')
         ->assertSet('photoReviewPhotoId', $first->id)
         ->call('openFirstCleanedPhotoReview')
-        ->assertSet('photoReviewPhotoId', $second->id)
-        ->call('closePhotoReview')
-        ->assertSet('photoReviewPhotoId', null)
-        ->assertSet('photoReviewModalOpen', false);
+        ->assertSet('photoReviewPhotoId', $second->id);
 });
 
-test('single photo cleanup opens review while batch cleanup stays non-interruptive', function (): void {
+test('single photo cleanup selects the workbench photo while batch cleanup stays non-interruptive', function (): void {
     Storage::fake('local');
 
     $user = createAdminUser();
@@ -400,13 +395,9 @@ test('single photo cleanup opens review while batch cleanup stays non-interrupti
     Livewire::test(Show::class, ['item' => $item->fresh()])
         ->call('runPhotoCleanup', $first->id)
         ->assertSet('photoReviewPhotoId', $first->id)
-        ->assertSet('photoReviewModalOpen', true)
-        ->call('closePhotoReview')
-        ->assertSet('photoReviewPhotoId', null)
-        ->assertSet('photoReviewModalOpen', false)
+        ->call('openPhotoReview', $second->id)
         ->call('runPhotoCleanupBatch')
-        ->assertSet('photoReviewPhotoId', null)
-        ->assertSet('photoReviewModalOpen', false);
+        ->assertSet('photoReviewPhotoId', $second->id);
 
     expect($first->fresh('cleanedAsset')->cleanedAsset)->toBeInstanceOf(MediaAsset::class)
         ->and($second->fresh('cleanedAsset')->cleanedAsset)->toBeInstanceOf(MediaAsset::class);
@@ -467,7 +458,6 @@ test('a cleaned photo can be accepted and reverted for marketplace listings', fu
     $component = Livewire::test(Show::class, ['item' => $item])
         ->call('openPhotoReview', $photo->id)
         ->call('acceptCleanedPhoto', $photo->id, $cleaned->id)
-        ->assertSet('photoReviewModalOpen', true)
         ->assertSet('photoReviewPhotoId', $photo->id);
 
     expect($photo->refresh()->use_cleaned_photo)->toBeTrue()
@@ -476,7 +466,6 @@ test('a cleaned photo can be accepted and reverted for marketplace listings', fu
 
     $component
         ->call('revertCleanedPhoto', $photo->id)
-        ->assertSet('photoReviewModalOpen', true)
         ->assertSet('photoReviewPhotoId', $photo->id);
 
     expect($photo->refresh()->use_cleaned_photo)->toBeFalse();
@@ -533,7 +522,7 @@ test('photo cleanup keeps one cleaned derivative per provider', function (): voi
         ->call('openPhotoReview', $photo->id)
         ->call('setPhotoCleanupProvider', 'poof')
         ->call('runPhotoCleanup', $photo->id)
-        ->assertSet('photoReviewModalOpen', true)
+        ->assertSet('photoReviewPhotoId', $photo->id)
         ->assertSee('PhotoRoom')
         ->assertSee('Poof');
 
@@ -560,7 +549,6 @@ test('unselected cleaned versions can be deleted without deleting the listing im
         ->call('openPhotoReview', $photo->id)
         ->call('acceptCleanedPhoto', $photo->id, $photoRoom->id)
         ->call('deleteUnselectedCleanedVersions', $photo->id)
-        ->assertSet('photoReviewModalOpen', true)
         ->assertSet('photoReviewPhotoId', $photo->id);
 
     $photo->refresh();
@@ -594,7 +582,7 @@ test('photo cleanup uses the visible ready provider when the saved provider is n
 
     Livewire::test(Show::class, ['item' => $item->fresh()])
         ->call('runPhotoCleanup', $photo->id)
-        ->assertSet('photoReviewModalOpen', true)
+        ->assertSet('photoReviewPhotoId', $photo->id)
         ->assertSee('Poof');
 
     $cleaned = $photo->fresh('cleanedAsset')->cleanedAsset;
