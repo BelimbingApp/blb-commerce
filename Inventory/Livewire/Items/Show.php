@@ -430,8 +430,6 @@ class Show extends Component
         }
 
         app(PhotoCleanupSelection::class)->setActiveProvider($this->item->company_id, $providerKey);
-
-        $this->notify(__('Photo cleanup now uses :provider.', ['provider' => $provider['label']]));
     }
 
     /**

@@ -536,7 +536,7 @@ test('photo review shows cleanup provenance and can switch the cleanup provider'
     Livewire::test(Show::class, ['item' => $item->fresh()])
         ->call('openPhotoReview', $photo->id)
         ->call('setPhotoCleanupProvider', 'poof')
-        ->assertDispatched('notify', variant: 'success', message: __('Photo cleanup now uses :provider.', ['provider' => 'Poof']));
+        ->assertNotDispatched('notify');
 
     expect(app(PhotoCleanupSelection::class)->activeProviderKey($user->company_id))->toBe('poof');
 });
