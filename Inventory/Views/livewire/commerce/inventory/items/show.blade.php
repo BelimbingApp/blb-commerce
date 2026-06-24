@@ -864,8 +864,8 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                     },
                     photoGridClasses() {
                         return {
-                            'gap-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-8': this.photoRollSize === 'small',
-                            'gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6': this.photoRollSize === 'medium',
+                            'gap-2 grid-cols-3 sm:grid-cols-4 md:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10': this.photoRollSize === 'small',
+                            'gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6': this.photoRollSize === 'medium',
                             'gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4': this.photoRollSize === 'large',
                         };
                     },
@@ -918,7 +918,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                         </div>
                     </div>
 
-                    <div class="flex flex-wrap items-start justify-between gap-4">
+                    <div>
                         <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-2">
                                 <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Photos') }}</h2>
@@ -934,7 +934,21 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                             <p class="mt-1 text-sm text-muted">{{ __('Each source photo contributes one listing version. Open review to compare the original with provider results.') }}</p>
                         </div>
 
-                        <div class="flex flex-wrap items-end gap-2">
+                        @if ($this->canEdit())
+                            <label for="item-photos" class="sr-only">{{ __('Add photos') }}</label>
+                            <input
+                                x-ref="photoInput"
+                                id="item-photos"
+                                type="file"
+                                multiple
+                                accept="image/*"
+                                wire:model="photoFiles"
+                                x-on:change="if ($event.target.files && $event.target.files.length > 0) autoUploadOnFinish = true"
+                                class="sr-only"
+                            />
+                        @endif
+
+                        <div class="mt-4 flex flex-wrap items-end justify-between gap-3">
                             <div class="space-y-1">
                                 <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Thumbnails') }}</p>
                                 <x-ui.segmented-control
@@ -947,53 +961,42 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                     ]"
                                     value="large"
                                     :label="__('Thumbnail size')"
+                                    size="md"
                                 />
                             </div>
 
-                            @if ($this->canEdit())
-                                <label for="item-photos" class="sr-only">{{ __('Add photos') }}</label>
-                                <input
-                                    x-ref="photoInput"
-                                    id="item-photos"
-                                    type="file"
-                                    multiple
-                                    accept="image/*"
-                                    wire:model="photoFiles"
-                                    x-on:change="if ($event.target.files && $event.target.files.length > 0) autoUploadOnFinish = true"
-                                    class="sr-only"
-                                />
-                            @endif
+                            <div class="ml-auto flex flex-wrap items-end justify-end gap-2">
+                                @if ($this->canEdit() && count($photoCleanupProviders) > 1)
+                                    <div class="w-56">
+                                        <x-ui.select
+                                            id="photo-batch-cleanup-provider"
+                                            wire:change="setPhotoCleanupProvider($event.target.value)"
+                                            label="{{ __('Provider') }}"
+                                        >
+                                            @foreach ($photoCleanupProviders as $cleanupProvider)
+                                                <option value="{{ $cleanupProvider['key'] }}" @selected($cleanupProvider['active'])>
+                                                    {{ $cleanupProvider['label'] }}
+                                                </option>
+                                            @endforeach
+                                        </x-ui.select>
+                                    </div>
+                                @endif
 
-                            @if ($this->canEdit() && count($photoCleanupProviders) > 1)
-                                <div class="w-48">
-                                    <x-ui.select
-                                        id="photo-batch-cleanup-provider"
-                                        wire:change="setPhotoCleanupProvider($event.target.value)"
-                                        label="{{ __('Provider') }}"
+                                @if ($this->canEdit() && $hasPhotoCleanupProvider && $item->photos->isNotEmpty())
+                                    <x-ui.button
+                                        type="button"
+                                        variant="outline"
+                                        size="md"
+                                        wire:click="runPhotoCleanupBatch"
+                                        wire:loading.attr="disabled"
+                                        wire:target="runPhotoCleanupBatch"
+                                        title="{{ __('Remove the background from every photo that does not already have a version from the active provider.') }}"
                                     >
-                                        @foreach ($photoCleanupProviders as $cleanupProvider)
-                                            <option value="{{ $cleanupProvider['key'] }}" @selected($cleanupProvider['active'])>
-                                                {{ $cleanupProvider['label'] }}
-                                            </option>
-                                        @endforeach
-                                    </x-ui.select>
-                                </div>
-                            @endif
-
-                            @if ($this->canEdit() && $hasPhotoCleanupProvider && $item->photos->isNotEmpty())
-                                <x-ui.button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    wire:click="runPhotoCleanupBatch"
-                                    wire:loading.attr="disabled"
-                                    wire:target="runPhotoCleanupBatch"
-                                    title="{{ __('Remove the background from every photo that does not already have a version from the active provider.') }}"
-                                >
-                                    <x-icon name="heroicon-o-sparkles" class="h-4 w-4" />
-                                    {{ count($photoCleanupProviders) > 1 || ! $activeCleanupProviderLabel ? __('Clean all') : __('Clean all with :provider', ['provider' => $activeCleanupProviderLabel]) }}
-                                </x-ui.button>
-                            @endif
+                                        <x-icon name="heroicon-o-sparkles" class="h-4 w-4" />
+                                        {{ count($photoCleanupProviders) > 1 || ! $activeCleanupProviderLabel ? __('Clean all') : __('Clean all with :provider', ['provider' => $activeCleanupProviderLabel]) }}
+                                    </x-ui.button>
+                                @endif
+                            </div>
                         </div>
                     </div>
 
