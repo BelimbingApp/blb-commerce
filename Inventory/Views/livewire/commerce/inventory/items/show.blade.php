@@ -846,6 +846,42 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                 $activeCleanupProvider = collect($photoCleanupProviders)->firstWhere('active', true);
                 $activeCleanupProviderLabel = data_get($activeCleanupProvider, 'label');
                 $hasPhotoCleanupProvider = count($photoCleanupProviders) > 0;
+                $photoProviderLabel = static function (\App\Base\Media\Models\MediaAsset $asset): string {
+                    $providerLabel = data_get($asset->metadata, 'provider_label');
+
+                    if (is_string($providerLabel) && trim($providerLabel) !== '') {
+                        return trim($providerLabel);
+                    }
+
+                    return \Illuminate\Support\Str::headline((string) data_get($asset->metadata, 'provider', __('cleanup provider')));
+                };
+                $photoRollBadgeLabel = static function (\App\Modules\Commerce\Inventory\Models\ItemPhoto $photo, ?\App\Base\Media\Models\MediaAsset $selectedAsset) use ($activePhotoCleanupProviderKey, $photoProviderLabel): ?string {
+                    $badgeAsset = $selectedAsset;
+
+                    if (! $badgeAsset instanceof \App\Base\Media\Models\MediaAsset && is_string($activePhotoCleanupProviderKey)) {
+                        $badgeAsset = $photo->cleanedAssetForProvider($activePhotoCleanupProviderKey);
+                    }
+
+                    $badgeAsset ??= $photo->cleanedAssets->last();
+
+                    if (! $badgeAsset instanceof \App\Base\Media\Models\MediaAsset) {
+                        return null;
+                    }
+
+                    $label = $photoProviderLabel($badgeAsset);
+
+                    if ($selectedAsset instanceof \App\Base\Media\Models\MediaAsset) {
+                        return $label;
+                    }
+
+                    $otherCleanedVersionCount = $photo->cleanedAssets
+                        ->reject(fn (\App\Base\Media\Models\MediaAsset $asset): bool => $asset->id === $badgeAsset->id)
+                        ->count();
+
+                    return $otherCleanedVersionCount > 0
+                        ? __(':provider +:count', ['provider' => $label, 'count' => $otherCleanedVersionCount])
+                        : $label;
+                };
             @endphp
 
             <div
@@ -856,11 +892,21 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                     dragDepth: 0,
                     autoUploadOnFinish: false,
                     uploadError: false,
+                    lastReviewedPhotoId: null,
+                    lastReviewedPhotoTimer: null,
+                    reviewModalOpen: @entangle('photoReviewModalOpen'),
+                    reviewPhotoId: @entangle('photoReviewPhotoId'),
                     photoRollSize: localStorage.getItem('commerce.inventory.photoRollSize') || 'large',
                     init() {
                         if (!['small', 'medium', 'large'].includes(this.photoRollSize)) {
                             this.photoRollSize = 'large';
                         }
+
+                        this.$watch('reviewModalOpen', (open) => {
+                            if (open || !this.reviewPhotoId) return;
+
+                            this.highlightReviewedPhoto(this.reviewPhotoId);
+                        });
                     },
                     photoGridClasses() {
                         return {
@@ -872,6 +918,25 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                     setPhotoRollSize(value) {
                         this.photoRollSize = value;
                         localStorage.setItem('commerce.inventory.photoRollSize', value);
+                    },
+                    highlightReviewedPhoto(photoId) {
+                        const id = Number(photoId);
+
+                        if (!id) return;
+
+                        this.lastReviewedPhotoId = id;
+                        clearTimeout(this.lastReviewedPhotoTimer);
+
+                        this.$nextTick(() => {
+                            const card = this.$root.querySelector(`[data-photo-card='${id}']`);
+                            card?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+                        });
+
+                        this.lastReviewedPhotoTimer = setTimeout(() => {
+                            if (this.lastReviewedPhotoId === id) {
+                                this.lastReviewedPhotoId = null;
+                            }
+                        }, 3500);
                     },
                 }"
                 @dragenter.prevent.stop="
@@ -1055,14 +1120,13 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                         $displayAsset = $photo->displayAsset();
                                         $selectedAsset = $photo->use_cleaned_photo ? $photo->activeCleanedAsset() : null;
                                         $listingLabel = $selectedAsset instanceof \App\Base\Media\Models\MediaAsset
-                                            ? (data_get($selectedAsset->metadata, 'provider_label')
-                                                ?: \Illuminate\Support\Str::headline((string) data_get($selectedAsset->metadata, 'provider', __('cleanup provider'))))
+                                            ? $photoProviderLabel($selectedAsset)
                                             : __('Original');
-                                        $versionCount = $photo->cleanedAssets->count() + 1;
+                                        $photoBadgeLabel = $photoRollBadgeLabel($photo, $selectedAsset);
                                     @endphp
 
                                     @if ($displayAsset instanceof \App\Base\Media\Models\MediaAsset)
-                                        <article wire:key="listing-photo-{{ $photo->id }}" class="overflow-hidden rounded-2xl border border-border-default bg-surface-card">
+                                        <article wire:key="listing-photo-{{ $photo->id }}" data-photo-card="{{ $photo->id }}" class="overflow-hidden rounded-2xl border border-border-default bg-surface-card transition-shadow" :class="lastReviewedPhotoId === {{ $photo->id }} ? 'border-accent ring-2 ring-accent/25' : ''">
                                             <div class="relative">
                                                 <button
                                                     type="button"
@@ -1076,10 +1140,8 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                                         loading="lazy"
                                                     />
 
-                                                    @if ($photo->use_cleaned_photo)
-                                                        <span class="absolute bottom-2 left-2 max-w-[calc(100%-1rem)] truncate rounded-full bg-surface-card/90 px-2 py-0.5 text-[11px] font-medium text-ink shadow-sm">{{ $listingLabel }}</span>
-                                                    @elseif ($versionCount > 1)
-                                                        <span class="absolute bottom-2 left-2 rounded-full bg-surface-card/90 px-2 py-0.5 text-[11px] font-medium text-ink shadow-sm">{{ trans_choice(':count version|:count versions', $versionCount, ['count' => $versionCount]) }}</span>
+                                                    @if ($photoBadgeLabel)
+                                                        <span class="absolute bottom-2 left-2 max-w-[calc(100%-1rem)] truncate rounded-full bg-surface-card/90 px-2 py-0.5 text-[11px] font-medium text-ink shadow-sm">{{ $photoBadgeLabel }}</span>
                                                     @endif
                                                 </button>
 
@@ -1154,14 +1216,13 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                             $displayAsset = $photo->displayAsset();
                                             $selectedAsset = $photo->use_cleaned_photo ? $photo->activeCleanedAsset() : null;
                                             $listingLabel = $selectedAsset instanceof \App\Base\Media\Models\MediaAsset
-                                                ? (data_get($selectedAsset->metadata, 'provider_label')
-                                                    ?: \Illuminate\Support\Str::headline((string) data_get($selectedAsset->metadata, 'provider', __('cleanup provider'))))
+                                                ? $photoProviderLabel($selectedAsset)
                                                 : __('Original');
-                                            $versionCount = $photo->cleanedAssets->count() + 1;
+                                            $photoBadgeLabel = $photoRollBadgeLabel($photo, $selectedAsset);
                                         @endphp
 
                                         @if ($displayAsset instanceof \App\Base\Media\Models\MediaAsset)
-                                            <article wire:key="unlisted-photo-{{ $photo->id }}" class="overflow-hidden rounded-2xl border border-border-default bg-surface-card">
+                                            <article wire:key="unlisted-photo-{{ $photo->id }}" data-photo-card="{{ $photo->id }}" class="overflow-hidden rounded-2xl border border-border-default bg-surface-card transition-shadow" :class="lastReviewedPhotoId === {{ $photo->id }} ? 'border-accent ring-2 ring-accent/25' : ''">
                                                 <div class="relative">
                                                     <button
                                                         type="button"
@@ -1175,10 +1236,8 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                                             loading="lazy"
                                                         />
 
-                                                        @if ($photo->use_cleaned_photo)
-                                                            <span class="absolute bottom-2 left-2 max-w-[calc(100%-1rem)] truncate rounded-full bg-surface-card/90 px-2 py-0.5 text-[11px] font-medium text-ink shadow-sm">{{ $listingLabel }}</span>
-                                                        @elseif ($versionCount > 1)
-                                                            <span class="absolute bottom-2 left-2 rounded-full bg-surface-card/90 px-2 py-0.5 text-[11px] font-medium text-ink shadow-sm">{{ trans_choice(':count version|:count versions', $versionCount, ['count' => $versionCount]) }}</span>
+                                                        @if ($photoBadgeLabel)
+                                                            <span class="absolute bottom-2 left-2 max-w-[calc(100%-1rem)] truncate rounded-full bg-surface-card/90 px-2 py-0.5 text-[11px] font-medium text-ink shadow-sm">{{ $photoBadgeLabel }}</span>
                                                         @endif
                                                     </button>
 
@@ -1238,13 +1297,10 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                             'asset' => $reviewOriginalAsset,
                             'type' => 'original',
                             'selected' => $originalSelected,
-                        ]])->merge($reviewCleanedAssets->map(function (\App\Base\Media\Models\MediaAsset $asset) use ($selectedCleanedAssetId): array {
-                            $provider = data_get($asset->metadata, 'provider_label')
-                                ?: \Illuminate\Support\Str::headline((string) data_get($asset->metadata, 'provider', __('cleanup provider')));
-
+                        ]])->merge($reviewCleanedAssets->map(function (\App\Base\Media\Models\MediaAsset $asset) use ($selectedCleanedAssetId, $photoProviderLabel): array {
                             return [
                                 'id' => 'cleaned-'.$asset->id,
-                                'label' => $provider,
+                                'label' => $photoProviderLabel($asset),
                                 'asset' => $asset,
                                 'type' => 'cleaned',
                                 'selected' => $selectedCleanedAssetId === $asset->id,

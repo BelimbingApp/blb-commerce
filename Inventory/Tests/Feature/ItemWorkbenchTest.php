@@ -381,6 +381,23 @@ test('photo review opens from a photo and navigates the item photo set', functio
         ->assertSet('photoReviewModalOpen', false);
 });
 
+test('photo roll names the provider result instead of a generic version count', function (): void {
+    Storage::fake('local');
+
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $item = Item::factory()->create(['company_id' => $user->company_id]);
+    $photo = createInventoryItemPhoto($item);
+
+    backgroundRemovedDerivative($photo->mediaAsset, 'POOF-PNG-BYTES', 'poof', 'Poof');
+
+    Livewire::test(Show::class, ['item' => $item->fresh()])
+        ->assertSee('Poof')
+        ->assertSee('Version: Original')
+        ->assertDontSee('2 versions');
+});
+
 test('single photo cleanup opens the review modal while batch cleanup stays non-interruptive', function (): void {
     Storage::fake('local');
 
