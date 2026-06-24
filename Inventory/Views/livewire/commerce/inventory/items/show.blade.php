@@ -840,7 +840,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                 $listingPhotos = $item->photos
                     ->filter(fn (\App\Modules\Commerce\Inventory\Models\ItemPhoto $photo): bool => $photo->selected_for_listing)
                     ->values();
-                $availablePhotos = $item->photos
+                $unlistedPhotos = $item->photos
                     ->reject(fn (\App\Modules\Commerce\Inventory\Models\ItemPhoto $photo): bool => $photo->selected_for_listing)
                     ->values();
                 $activeCleanupProvider = collect($photoCleanupProviders)->firstWhere('active', true);
@@ -856,6 +856,23 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                     dragDepth: 0,
                     autoUploadOnFinish: false,
                     uploadError: false,
+                    photoRollSize: localStorage.getItem('commerce.inventory.photoRollSize') || 'large',
+                    init() {
+                        if (!['small', 'medium', 'large'].includes(this.photoRollSize)) {
+                            this.photoRollSize = 'large';
+                        }
+                    },
+                    photoGridClasses() {
+                        return {
+                            'gap-2 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-8': this.photoRollSize === 'small',
+                            'gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6': this.photoRollSize === 'medium',
+                            'gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4': this.photoRollSize === 'large',
+                        };
+                    },
+                    setPhotoRollSize(value) {
+                        this.photoRollSize = value;
+                        localStorage.setItem('commerce.inventory.photoRollSize', value);
+                    },
                 }"
                 @dragenter.prevent.stop="
                     dragDepth++;
@@ -907,17 +924,32 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                 <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Photos') }}</h2>
                                 <x-ui.badge>{{ trans_choice(':count photo|:count photos', $item->photos->count(), ['count' => $item->photos->count()]) }}</x-ui.badge>
                                 <x-ui.badge :variant="$listingPhotos->isNotEmpty() ? 'success' : 'warning'">{{ trans_choice(':count listing photo|:count listing photos', $listingPhotos->count(), ['count' => $listingPhotos->count()]) }}</x-ui.badge>
-                                @if ($availablePhotos->isNotEmpty())
-                                    <x-ui.badge>{{ trans_choice(':count available|:count available', $availablePhotos->count(), ['count' => $availablePhotos->count()]) }}</x-ui.badge>
+                                @if ($unlistedPhotos->isNotEmpty())
+                                    <x-ui.badge>{{ trans_choice(':count unlisted|:count unlisted', $unlistedPhotos->count(), ['count' => $unlistedPhotos->count()]) }}</x-ui.badge>
                                 @endif
                                 @if ($cleanedPhotoCount > 0)
                                     <x-ui.badge variant="success">{{ trans_choice(':count cleaned|:count cleaned', $cleanedPhotoCount, ['count' => $cleanedPhotoCount]) }}</x-ui.badge>
                                 @endif
                             </div>
-                            <p class="mt-1 text-sm text-muted">{{ __('Pick which photos go to listings here. The review modal compares originals with provider results.') }}</p>
+                            <p class="mt-1 text-sm text-muted">{{ __('Each source photo contributes one listing version. Open review to compare the original with provider results.') }}</p>
                         </div>
 
                         <div class="flex flex-wrap items-end gap-2">
+                            <div class="space-y-1">
+                                <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Thumbnails') }}</p>
+                                <x-ui.segmented-control
+                                    x-model="photoRollSize"
+                                    @segmented-control-change="setPhotoRollSize($event.detail.value)"
+                                    :options="[
+                                        ['value' => 'small', 'label' => __('Small')],
+                                        ['value' => 'medium', 'label' => __('Medium')],
+                                        ['value' => 'large', 'label' => __('Large')],
+                                    ]"
+                                    value="large"
+                                    :label="__('Thumbnail size')"
+                                />
+                            </div>
+
                             @if ($this->canEdit())
                                 <label for="item-photos" class="sr-only">{{ __('Add photos') }}</label>
                                 <input
@@ -1006,7 +1038,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                 </div>
                             </div>
 
-                            <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+                            <div class="grid" :class="photoGridClasses()">
                                 @foreach ($listingPhotos as $photo)
                                     @php
                                         $displayAsset = $photo->displayAsset();
@@ -1020,40 +1052,50 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 
                                     @if ($displayAsset instanceof \App\Base\Media\Models\MediaAsset)
                                         <article wire:key="listing-photo-{{ $photo->id }}" class="overflow-hidden rounded-2xl border border-border-default bg-surface-card">
-                                            <button
-                                                type="button"
-                                                wire:click="openPhotoReview({{ $photo->id }})"
-                                                class="group relative block aspect-square w-full overflow-hidden bg-surface-subtle text-left"
-                                            >
-                                                <img
-                                                    src="{{ $displayAsset->displayUrl() }}"
-                                                    alt="{{ __('Review item photo: :filename', ['filename' => $displayAsset->original_filename ?? __('Photo')]) }}"
-                                                    class="h-full w-full cursor-pointer object-cover transition-transform group-hover:scale-[1.02]"
-                                                    loading="lazy"
-                                                />
+                                            <div class="relative">
+                                                <button
+                                                    type="button"
+                                                    wire:click="openPhotoReview({{ $photo->id }})"
+                                                    class="group block aspect-square w-full overflow-hidden bg-surface-subtle text-left"
+                                                >
+                                                    <img
+                                                        src="{{ $displayAsset->displayUrl() }}"
+                                                        alt="{{ __('Review item photo: :filename', ['filename' => $displayAsset->original_filename ?? __('Photo')]) }}"
+                                                        class="h-full w-full cursor-pointer object-cover transition-transform group-hover:scale-[1.02]"
+                                                        loading="lazy"
+                                                    />
 
-                                                <span class="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-surface-card text-status-success shadow-sm">
-                                                    <x-icon name="heroicon-o-check" class="h-4 w-4" />
-                                                </span>
-
-                                                @if ($photo->use_cleaned_photo)
-                                                    <span class="absolute bottom-2 left-2 max-w-[calc(100%-1rem)] truncate rounded-full bg-surface-card/90 px-2 py-0.5 text-[11px] font-medium text-ink shadow-sm">{{ $listingLabel }}</span>
-                                                @elseif ($versionCount > 1)
-                                                    <span class="absolute bottom-2 left-2 rounded-full bg-surface-card/90 px-2 py-0.5 text-[11px] font-medium text-ink shadow-sm">{{ trans_choice(':count version|:count versions', $versionCount, ['count' => $versionCount]) }}</span>
-                                                @endif
-                                            </button>
-
-                                            <div class="space-y-2 p-3">
-                                                <div class="min-w-0">
-                                                    <p class="truncate text-sm font-medium text-ink">{{ $displayAsset->original_filename ?? __('Photo') }}</p>
-                                                    <p class="text-xs text-muted">{{ __('Listings use :version', ['version' => $listingLabel]) }}</p>
-                                                </div>
+                                                    @if ($photo->use_cleaned_photo)
+                                                        <span class="absolute bottom-2 left-2 max-w-[calc(100%-1rem)] truncate rounded-full bg-surface-card/90 px-2 py-0.5 text-[11px] font-medium text-ink shadow-sm">{{ $listingLabel }}</span>
+                                                    @elseif ($versionCount > 1)
+                                                        <span class="absolute bottom-2 left-2 rounded-full bg-surface-card/90 px-2 py-0.5 text-[11px] font-medium text-ink shadow-sm">{{ trans_choice(':count version|:count versions', $versionCount, ['count' => $versionCount]) }}</span>
+                                                    @endif
+                                                </button>
 
                                                 @if ($this->canEdit())
-                                                    <x-ui.button type="button" variant="ghost" size="sm" class="w-full" wire:click="setPhotoListingSelection({{ $photo->id }}, false)" wire:loading.attr="disabled" wire:target="setPhotoListingSelection({{ $photo->id }}, false)">
-                                                        {{ __('Move to available') }}
-                                                    </x-ui.button>
+                                                    <button
+                                                        type="button"
+                                                        wire:click="setPhotoListingSelection({{ $photo->id }}, false)"
+                                                        wire:loading.attr="disabled"
+                                                        wire:target="setPhotoListingSelection({{ $photo->id }}, false)"
+                                                        title="{{ __('Unlist photo') }}"
+                                                        class="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-status-success-border bg-surface-card text-status-success shadow-sm transition-colors hover:border-status-danger-border hover:text-status-danger focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 disabled:opacity-50"
+                                                    >
+                                                        <x-icon name="heroicon-o-check" class="h-4 w-4" />
+                                                        <span class="sr-only">{{ __('Unlist photo') }}</span>
+                                                    </button>
+                                                @else
+                                                    <span class="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-status-success-border bg-surface-card text-status-success shadow-sm">
+                                                        <x-icon name="heroicon-o-check" class="h-4 w-4" />
+                                                    </span>
                                                 @endif
+                                            </div>
+
+                                            <div x-cloak x-show="photoRollSize !== 'small'" class="space-y-1 p-3">
+                                                <div class="min-w-0">
+                                                    <p class="truncate text-sm font-medium text-ink">{{ $displayAsset->original_filename ?? __('Photo') }}</p>
+                                                    <p class="text-xs text-muted">{{ __('Listing version: :version', ['version' => $listingLabel]) }}</p>
+                                                </div>
                                             </div>
                                         </article>
                                     @endif
@@ -1063,13 +1105,13 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                     <button
                                         type="button"
                                         x-on:click="$refs.photoInput.click()"
-                                        class="flex min-h-48 flex-col items-center justify-center rounded-2xl border border-dashed border-border-default bg-surface-subtle p-4 text-center transition-colors hover:border-accent hover:bg-surface-card"
+                                        class="flex aspect-square flex-col items-center justify-center rounded-2xl border border-dashed border-border-default bg-surface-subtle p-4 text-center transition-colors hover:border-accent hover:bg-surface-card"
                                     >
                                         <span class="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-surface-card text-muted">
                                             <x-icon name="heroicon-o-arrow-up-tray" class="h-5 w-5" />
                                         </span>
                                         <span class="text-sm font-medium text-ink">{{ __('Add photos') }}</span>
-                                        <span class="mt-1 text-xs text-muted">{{ __('Drop files anywhere in this panel.') }}</span>
+                                        <span x-cloak x-show="photoRollSize !== 'small'" class="mt-1 text-xs text-muted">{{ __('Drop files anywhere in this panel.') }}</span>
                                     </button>
                                 @endif
                             </div>
@@ -1078,25 +1120,25 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                         <section class="mt-6 border-t border-border-default pt-5">
                             <div class="mb-3 flex flex-wrap items-start justify-between gap-3">
                                 <div>
-                                    <h3 class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Available photos') }}</h3>
-                                    <p class="mt-1 text-xs text-muted">{{ __('Kept on this item, but not sent to marketplace listings.') }}</p>
+                                    <h3 class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Unlisted photos') }}</h3>
+                                    <p class="mt-1 text-xs text-muted">{{ __('Kept on this item, not sent to marketplaces.') }}</p>
                                 </div>
 
-                                @if ($this->canEdit() && $availablePhotos->isNotEmpty())
-                                    <x-ui.button type="button" variant="danger-ghost" size="sm" wire:click="deleteUnselectedPhotos" wire:confirm="{{ __('Delete every available photo? Listing photos will be kept.') }}" wire:loading.attr="disabled" wire:target="deleteUnselectedPhotos">
+                                @if ($this->canEdit() && $unlistedPhotos->isNotEmpty())
+                                    <x-ui.button type="button" variant="danger-ghost" size="sm" wire:click="deleteUnselectedPhotos" wire:confirm="{{ __('Delete every unlisted photo? Listing photos will be kept.') }}" wire:loading.attr="disabled" wire:target="deleteUnselectedPhotos">
                                         <x-icon name="heroicon-o-trash" class="h-4 w-4" />
-                                        {{ __('Delete available') }}
+                                        {{ __('Delete unlisted') }}
                                     </x-ui.button>
                                 @endif
                             </div>
 
-                            @if ($availablePhotos->isEmpty())
+                            @if ($unlistedPhotos->isEmpty())
                                 <div class="rounded-2xl border border-dashed border-border-default bg-surface-subtle p-4 text-sm text-muted">
-                                    {{ __('No available photos. Move a listing photo here when you want to keep it on the item without publishing it.') }}
+                                    {{ __('No unlisted photos. Unlist a photo when you want to keep it on the item without publishing it.') }}
                                 </div>
                             @else
-                                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-                                    @foreach ($availablePhotos as $photo)
+                                <div class="grid" :class="photoGridClasses()">
+                                    @foreach ($unlistedPhotos as $photo)
                                         @php
                                             $displayAsset = $photo->displayAsset();
                                             $selectedAsset = $photo->use_cleaned_photo ? $photo->activeCleanedAsset() : null;
@@ -1108,38 +1150,51 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                         @endphp
 
                                         @if ($displayAsset instanceof \App\Base\Media\Models\MediaAsset)
-                                            <article wire:key="available-photo-{{ $photo->id }}" class="overflow-hidden rounded-2xl border border-border-default bg-surface-card">
-                                                <button
-                                                    type="button"
-                                                    wire:click="openPhotoReview({{ $photo->id }})"
-                                                    class="group relative block aspect-square w-full overflow-hidden bg-surface-subtle text-left"
-                                                >
-                                                    <img
-                                                        src="{{ $displayAsset->displayUrl() }}"
-                                                        alt="{{ __('Review item photo: :filename', ['filename' => $displayAsset->original_filename ?? __('Photo')]) }}"
-                                                        class="h-full w-full cursor-pointer object-cover opacity-80 transition group-hover:scale-[1.02] group-hover:opacity-100"
-                                                        loading="lazy"
-                                                    />
+                                            <article wire:key="unlisted-photo-{{ $photo->id }}" class="overflow-hidden rounded-2xl border border-border-default bg-surface-card">
+                                                <div class="relative">
+                                                    <button
+                                                        type="button"
+                                                        wire:click="openPhotoReview({{ $photo->id }})"
+                                                        class="group block aspect-square w-full overflow-hidden bg-surface-subtle text-left"
+                                                    >
+                                                        <img
+                                                            src="{{ $displayAsset->displayUrl() }}"
+                                                            alt="{{ __('Review item photo: :filename', ['filename' => $displayAsset->original_filename ?? __('Photo')]) }}"
+                                                            class="h-full w-full cursor-pointer object-cover opacity-80 transition group-hover:scale-[1.02] group-hover:opacity-100"
+                                                            loading="lazy"
+                                                        />
 
-                                                    @if ($photo->use_cleaned_photo)
-                                                        <span class="absolute bottom-2 left-2 max-w-[calc(100%-1rem)] truncate rounded-full bg-surface-card/90 px-2 py-0.5 text-[11px] font-medium text-ink shadow-sm">{{ $listingLabel }}</span>
-                                                    @elseif ($versionCount > 1)
-                                                        <span class="absolute bottom-2 left-2 rounded-full bg-surface-card/90 px-2 py-0.5 text-[11px] font-medium text-ink shadow-sm">{{ trans_choice(':count version|:count versions', $versionCount, ['count' => $versionCount]) }}</span>
-                                                    @endif
-                                                </button>
-
-                                                <div class="space-y-2 p-3">
-                                                    <div class="min-w-0">
-                                                        <p class="truncate text-sm font-medium text-ink">{{ $displayAsset->original_filename ?? __('Photo') }}</p>
-                                                        <p class="text-xs text-muted">{{ __('Available only') }}</p>
-                                                    </div>
+                                                        @if ($photo->use_cleaned_photo)
+                                                            <span class="absolute bottom-2 left-2 max-w-[calc(100%-1rem)] truncate rounded-full bg-surface-card/90 px-2 py-0.5 text-[11px] font-medium text-ink shadow-sm">{{ $listingLabel }}</span>
+                                                        @elseif ($versionCount > 1)
+                                                            <span class="absolute bottom-2 left-2 rounded-full bg-surface-card/90 px-2 py-0.5 text-[11px] font-medium text-ink shadow-sm">{{ trans_choice(':count version|:count versions', $versionCount, ['count' => $versionCount]) }}</span>
+                                                        @endif
+                                                    </button>
 
                                                     @if ($this->canEdit())
-                                                        <x-ui.button type="button" variant="outline" size="sm" class="w-full" wire:click="setPhotoListingSelection({{ $photo->id }}, true)" wire:loading.attr="disabled" wire:target="setPhotoListingSelection({{ $photo->id }}, true)">
-                                                            <x-icon name="heroicon-o-check" class="h-4 w-4" />
-                                                            {{ __('Add to listing') }}
-                                                        </x-ui.button>
+                                                        <button
+                                                            type="button"
+                                                            wire:click="setPhotoListingSelection({{ $photo->id }}, true)"
+                                                            wire:loading.attr="disabled"
+                                                            wire:target="setPhotoListingSelection({{ $photo->id }}, true)"
+                                                            title="{{ __('List photo') }}"
+                                                            class="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border-default bg-surface-card text-muted shadow-sm transition-colors hover:border-status-success-border hover:text-status-success focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 disabled:opacity-50"
+                                                        >
+                                                            <x-icon name="heroicon-o-plus" class="h-4 w-4" />
+                                                            <span class="sr-only">{{ __('List photo') }}</span>
+                                                        </button>
+                                                    @else
+                                                        <span class="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-border-default bg-surface-card text-muted shadow-sm">
+                                                            <span class="h-3.5 w-3.5 rounded-full border border-border-default"></span>
+                                                        </span>
                                                     @endif
+                                                </div>
+
+                                                <div x-cloak x-show="photoRollSize !== 'small'" class="space-y-1 p-3">
+                                                    <div class="min-w-0">
+                                                        <p class="truncate text-sm font-medium text-ink">{{ $displayAsset->original_filename ?? __('Photo') }}</p>
+                                                        <p class="text-xs text-muted">{{ __('Saved version: :version', ['version' => $listingLabel]) }}</p>
+                                                    </div>
                                                 </div>
                                             </article>
                                         @endif
@@ -1190,7 +1245,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                             ];
                         }))->values();
                         $selectedReviewVersions = $reviewVersions->filter(fn (array $version): bool => (bool) $version['selected'])->values();
-                        $availableReviewVersions = $reviewVersions->reject(fn (array $version): bool => (bool) $version['selected'])->values();
+                        $otherReviewVersions = $reviewVersions->reject(fn (array $version): bool => (bool) $version['selected'])->values();
                         $reviewVersionTabs = $reviewVersions
                             ->map(fn (array $version): array => ['id' => $version['id'], 'label' => $version['label']])
                             ->values()
@@ -1222,7 +1277,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                 <div class="min-w-0">
                                     <div class="flex flex-wrap items-center gap-2">
                                         <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Photo :current of :total', ['current' => $photoReviewPosition['current'], 'total' => $photoReviewPosition['total']]) }}</h2>
-                                        <x-ui.badge :variant="$photoReviewPhoto->selected_for_listing ? 'success' : 'default'">{{ $photoReviewPhoto->selected_for_listing ? __('Listing') : __('Available') }}</x-ui.badge>
+                                        <x-ui.badge :variant="$photoReviewPhoto->selected_for_listing ? 'success' : 'default'">{{ $photoReviewPhoto->selected_for_listing ? __('Listing') : __('Unlisted') }}</x-ui.badge>
                                     </div>
                                     <p class="mt-1 truncate text-sm text-muted">{{ $reviewFilename }}</p>
                                 </div>
@@ -1337,7 +1392,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 
                                                     @if ($version['type'] === 'cleaned')
                                                         <p class="mt-3 text-xs text-muted">
-                                                            {{ __('Cleaned :time via :provider. Original stays available; choosing a version only changes what marketplace listings use.', [
+                                                            {{ __('Cleaned :time via :provider. The original remains saved; choosing here only changes the one version marketplaces use.', [
                                                                 'time' => data_get($versionAsset->metadata, 'cleaned_at') ? \Illuminate\Support\Carbon::parse(data_get($versionAsset->metadata, 'cleaned_at'))->diffForHumans() : __('recently'),
                                                                 'provider' => $version['label'],
                                                             ]) }}
@@ -1351,7 +1406,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                     <aside class="space-y-4 rounded-2xl border border-border-default bg-surface-subtle p-4">
                                         <section>
                                             <h3 class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Photo') }}</h3>
-                                            <p class="mt-1 text-xs text-muted">{{ $photoReviewPhoto->selected_for_listing ? __('This photo is included when listings are created or pushed.') : __('This photo stays with the item but is not published.') }}</p>
+                                            <p class="mt-1 text-xs text-muted">{{ $photoReviewPhoto->selected_for_listing ? __('This source photo is listed with exactly one chosen version.') : __('This source photo stays with the item but is not published.') }}</p>
 
                                             @if ($this->canEdit())
                                                 <div class="mt-3">
@@ -1365,10 +1420,10 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                                         wire:target="setPhotoListingSelection({{ $photoReviewPhoto->id }})"
                                                     >
                                                         @if ($photoReviewPhoto->selected_for_listing)
-                                                            {{ __('Move to available') }}
+                                                            {{ __('Unlist photo') }}
                                                         @else
                                                             <x-icon name="heroicon-o-check" class="h-4 w-4" />
-                                                            {{ __('Add to listing') }}
+                                                            {{ __('List photo') }}
                                                         @endif
                                                     </x-ui.button>
                                                 </div>
@@ -1377,7 +1432,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 
                                         <section class="border-t border-border-default pt-4">
                                             <h3 class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Listing version') }}</h3>
-                                            <p class="mt-1 text-xs text-muted">{{ __('Choose the version listings use.') }}</p>
+                                            <p class="mt-1 text-xs text-muted">{{ __('Choose the single version marketplaces use for this source photo.') }}</p>
 
                                             <div class="mt-3 space-y-2">
                                                 @foreach ($selectedReviewVersions as $version)
@@ -1388,7 +1443,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                                     </div>
                                                 @endforeach
 
-                                                @foreach ($availableReviewVersions as $version)
+                                                @foreach ($otherReviewVersions as $version)
                                                     @php
                                                         /** @var \App\Base\Media\Models\MediaAsset $versionAsset */
                                                         $versionAsset = $version['asset'];

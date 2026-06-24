@@ -127,8 +127,8 @@ class Item extends Model
 
     /**
      * Photos that should be published to marketplace listings, preserving the
-     * operator's photo order. Available-but-unselected photos stay on the item
-     * for later cleanup or reference without leaking into listing payloads.
+     * operator's photo order. Unlisted photos stay on the item for later
+     * cleanup or reference without leaking into listing payloads.
      *
      * @return Collection<int, ItemPhoto>
      */

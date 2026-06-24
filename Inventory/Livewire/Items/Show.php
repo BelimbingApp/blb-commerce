@@ -318,7 +318,7 @@ class Show extends Component
 
         $this->item->load(self::PHOTO_RELATIONS);
         $this->refreshAllChannelReadiness();
-        $this->notify($selectedForListing ? __('Photo added to listing.') : __('Photo moved to available.'));
+        $this->notify($selectedForListing ? __('Photo listed.') : __('Photo unlisted.'));
     }
 
     public function deleteUnselectedPhotos(InventoryItemService $items): void
@@ -342,12 +342,12 @@ class Show extends Component
         $this->refreshAllChannelReadiness();
 
         if ($deleted === 0) {
-            $this->notify(__('No available photos to delete.'));
+            $this->notify(__('No unlisted photos to delete.'));
 
             return;
         }
 
-        $this->notify(trans_choice(':count available photo deleted.|:count available photos deleted.', $deleted, ['count' => $deleted]));
+        $this->notify(trans_choice(':count unlisted photo deleted.|:count unlisted photos deleted.', $deleted, ['count' => $deleted]));
     }
 
     public function deleteUnselectedCleanedVersions(int $photoId, InventoryItemService $items): void
@@ -467,7 +467,7 @@ class Show extends Component
     /**
      * Run background removal on every photo that does not already have a
      * derivative from the active provider. Other providers' derivatives are
-     * left available for comparison.
+     * kept for comparison.
      */
     public function runPhotoCleanupBatch(InventoryItemService $items): void
     {

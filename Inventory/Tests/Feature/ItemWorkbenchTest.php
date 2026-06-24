@@ -411,7 +411,7 @@ test('single photo cleanup opens the review modal while batch cleanup stays non-
         ->and($second->fresh('cleanedAsset')->cleanedAsset)->toBeInstanceOf(MediaAsset::class);
 });
 
-test('item photos can be moved between listing and available rolls and available photos can be deleted', function (): void {
+test('item photos can be moved between listing and unlisted rolls and unlisted photos can be deleted', function (): void {
     Storage::fake('local');
 
     $user = createAdminUser();
@@ -419,12 +419,12 @@ test('item photos can be moved between listing and available rolls and available
 
     $item = Item::factory()->create(['company_id' => $user->company_id]);
     $listing = createInventoryItemPhoto($item, 'LISTING-JPEG-BYTES', 0);
-    $available = createInventoryItemPhoto($item, 'AVAILABLE-JPEG-BYTES', 1, selectedForListing: false);
-    $availableAsset = $available->mediaAsset;
+    $unlisted = createInventoryItemPhoto($item, 'UNLISTED-JPEG-BYTES', 1, selectedForListing: false);
+    $unlistedAsset = $unlisted->mediaAsset;
 
     Livewire::test(Show::class, ['item' => $item->fresh()])
         ->assertSee('Listing photos')
-        ->assertSee('Available photos')
+        ->assertSee('Unlisted photos')
         ->call('setPhotoListingSelection', $listing->id, false)
         ->assertHasNoErrors();
 
@@ -437,10 +437,10 @@ test('item photos can be moved between listing and available rolls and available
         ->assertHasNoErrors();
 
     expect($listing->refresh()->selected_for_listing)->toBeTrue()
-        ->and(ItemPhoto::query()->whereKey($available->id)->exists())->toBeFalse()
-        ->and(MediaAsset::query()->whereKey($availableAsset->id)->exists())->toBeFalse();
+        ->and(ItemPhoto::query()->whereKey($unlisted->id)->exists())->toBeFalse()
+        ->and(MediaAsset::query()->whereKey($unlistedAsset->id)->exists())->toBeFalse();
 
-    Storage::disk('local')->assertMissing($availableAsset->storage_key);
+    Storage::disk('local')->assertMissing($unlistedAsset->storage_key);
 });
 
 test('runPhotoCleanup surfaces a flash error when PhotoRoom is not configured', function (): void {
