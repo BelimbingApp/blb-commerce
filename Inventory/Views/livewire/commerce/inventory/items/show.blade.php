@@ -1266,25 +1266,11 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                         >
                             <div class="flex flex-wrap items-start justify-between gap-3">
                                 <div class="min-w-0">
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Photo :current of :total', ['current' => $photoReviewPosition['current'], 'total' => $photoReviewPosition['total']]) }}</h2>
-                                        <x-ui.badge :variant="$photoReviewPhoto->selected_for_listing ? 'success' : 'default'">{{ $photoReviewPhoto->selected_for_listing ? __('Listing') : __('Unlisted') }}</x-ui.badge>
-                                    </div>
+                                    <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Photo :current of :total', ['current' => $photoReviewPosition['current'], 'total' => $photoReviewPosition['total']]) }}</h2>
                                     <p class="mt-1 truncate text-sm text-muted">{{ $reviewFilename }}</p>
                                 </div>
 
                                 <div class="flex flex-wrap items-center gap-2">
-                                    <x-ui.segmented-control
-                                        x-model="background"
-                                        :options="[
-                                            ['value' => 'checker', 'label' => __('Checker')],
-                                            ['value' => 'light', 'label' => __('Light')],
-                                            ['value' => 'dark', 'label' => __('Dark')],
-                                        ]"
-                                        value="checker"
-                                        :label="__('Preview background')"
-                                    />
-
                                     <x-ui.button type="button" variant="ghost" size="sm" wire:click="previousPhotoReview">
                                         <x-icon name="heroicon-o-chevron-left" class="h-4 w-4" />
                                         {{ __('Previous') }}
@@ -1311,10 +1297,27 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                                 @endphp
 
                                                 @if ($versionIsSelected)
-                                                    <span class="inline-flex max-w-full items-center gap-2 rounded-full border border-accent bg-surface-card px-3 py-2 text-sm font-medium text-ink shadow-sm ring-2 ring-accent/20">
-                                                        <x-icon name="heroicon-o-check" class="h-4 w-4 shrink-0 text-status-success" />
+                                                    <button
+                                                        type="button"
+                                                        @if ($this->canEdit())
+                                                            wire:click="setPhotoListingSelection({{ $photoReviewPhoto->id }}, {{ $photoReviewPhoto->selected_for_listing ? 'false' : 'true' }})"
+                                                            wire:loading.attr="disabled"
+                                                            wire:target="setPhotoListingSelection({{ $photoReviewPhoto->id }})"
+                                                        @else
+                                                            disabled
+                                                        @endif
+                                                        title="{{ $photoReviewPhoto->selected_for_listing ? __('Unlist photo') : __('List photo') }}"
+                                                        class="inline-flex min-h-9 max-w-full items-center gap-2 rounded-full border border-accent bg-surface-card px-input-x py-input-y text-sm font-medium text-ink shadow-sm ring-2 ring-accent/20 transition-colors hover:bg-surface-subtle focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 disabled:cursor-default disabled:hover:bg-surface-card"
+                                                    >
+                                                        @if ($photoReviewPhoto->selected_for_listing)
+                                                            <x-icon name="heroicon-o-check" class="h-4 w-4 shrink-0 text-status-success" />
+                                                            <span class="sr-only">{{ __('Unlist photo:') }}</span>
+                                                        @else
+                                                            <span class="h-4 w-4 shrink-0 rounded-full border border-border-default"></span>
+                                                            <span class="sr-only">{{ __('List photo:') }}</span>
+                                                        @endif
                                                         <span class="truncate">{{ $version['label'] }}</span>
-                                                    </span>
+                                                    </button>
                                                 @else
                                                     <button
                                                         type="button"
@@ -1330,7 +1333,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                                         @else
                                                             disabled
                                                         @endif
-                                                        class="inline-flex max-w-full items-center gap-2 rounded-full border border-border-default bg-surface-card px-3 py-2 text-sm font-medium text-ink transition-colors hover:border-accent hover:bg-surface-subtle focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 disabled:cursor-default disabled:opacity-60 disabled:hover:border-border-default disabled:hover:bg-surface-card"
+                                                        class="inline-flex min-h-9 max-w-full items-center gap-2 rounded-full border border-border-default bg-surface-card px-input-x py-input-y text-sm font-medium text-ink transition-colors hover:border-accent hover:bg-surface-subtle focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 disabled:cursor-default disabled:opacity-60 disabled:hover:border-border-default disabled:hover:bg-surface-card"
                                                     >
                                                         <span class="h-4 w-4 shrink-0 rounded-full border border-border-default"></span>
                                                         <span class="truncate">{{ $version['label'] }}</span>
@@ -1341,21 +1344,18 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 
                                         @if ($this->canEdit())
                                             <div class="flex flex-wrap items-center justify-end gap-2">
-                                                <x-ui.button
-                                                    type="button"
-                                                    :variant="$photoReviewPhoto->selected_for_listing ? 'ghost' : 'outline'"
-                                                    size="sm"
-                                                    wire:click="setPhotoListingSelection({{ $photoReviewPhoto->id }}, {{ $photoReviewPhoto->selected_for_listing ? 'false' : 'true' }})"
-                                                    wire:loading.attr="disabled"
-                                                    wire:target="setPhotoListingSelection({{ $photoReviewPhoto->id }})"
-                                                >
-                                                    @if ($photoReviewPhoto->selected_for_listing)
-                                                        {{ __('Unlist') }}
-                                                    @else
-                                                        <x-icon name="heroicon-o-check" class="h-4 w-4" />
-                                                        {{ __('List') }}
-                                                    @endif
-                                                </x-ui.button>
+                                                <x-ui.segmented-control
+                                                    x-model="background"
+                                                    :options="[
+                                                        ['value' => 'checker', 'label' => __('Checker')],
+                                                        ['value' => 'light', 'label' => __('Light')],
+                                                        ['value' => 'dark', 'label' => __('Dark')],
+                                                    ]"
+                                                    value="checker"
+                                                    :label="__('Preview background')"
+                                                    size="md"
+                                                    class="h-9"
+                                                />
 
                                                 @if (count($photoCleanupProviders) > 1)
                                                     <div class="w-44">
@@ -1363,6 +1363,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                                         <x-ui.select
                                                             id="photo-review-cleanup-provider"
                                                             wire:change="setPhotoCleanupProvider($event.target.value)"
+                                                            class="h-9"
                                                         >
                                                             @foreach ($photoCleanupProviders as $cleanupProvider)
                                                                 <option value="{{ $cleanupProvider['key'] }}" @selected($cleanupProvider['active'])>
@@ -1376,20 +1377,20 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                                 @endif
 
                                                 @if ($hasPhotoCleanupProvider && ($canCleanWithActiveProvider || ! $reviewCleanedAsset))
-                                                    <x-ui.button type="button" variant="primary" size="sm" wire:click="runPhotoCleanup({{ $photoReviewPhoto->id }})" wire:loading.attr="disabled" wire:target="runPhotoCleanup({{ $photoReviewPhoto->id }})">
+                                                    <x-ui.button type="button" variant="primary" size="md" wire:click="runPhotoCleanup({{ $photoReviewPhoto->id }})" wire:loading.attr="disabled" wire:target="runPhotoCleanup({{ $photoReviewPhoto->id }})">
                                                         <x-icon name="heroicon-o-sparkles" class="h-4 w-4" />
                                                         {{ __('Remove background') }}
                                                     </x-ui.button>
                                                 @endif
 
                                                 @if ($unselectedCleanedVersionCount > 0)
-                                                    <x-ui.button type="button" variant="outline" size="sm" wire:click="deleteUnselectedCleanedVersions({{ $photoReviewPhoto->id }})" wire:confirm="{{ __('Delete all cleaned versions that are not selected?') }}" wire:loading.attr="disabled" wire:target="deleteUnselectedCleanedVersions({{ $photoReviewPhoto->id }})">
+                                                    <x-ui.button type="button" variant="outline" size="md" wire:click="deleteUnselectedCleanedVersions({{ $photoReviewPhoto->id }})" wire:confirm="{{ __('Delete all cleaned versions that are not selected?') }}" wire:loading.attr="disabled" wire:target="deleteUnselectedCleanedVersions({{ $photoReviewPhoto->id }})">
                                                         <x-icon name="heroicon-o-trash" class="h-4 w-4" />
                                                         {{ __('Delete unused') }}
                                                     </x-ui.button>
                                                 @endif
 
-                                                <x-ui.button type="button" variant="outline" size="sm" class="border-status-danger-border text-status-danger hover:bg-status-danger-subtle" wire:click="deletePhoto({{ $photoReviewPhoto->id }})" wire:confirm="{{ __('Delete this photo and all its versions?') }}" wire:loading.attr="disabled" wire:target="deletePhoto({{ $photoReviewPhoto->id }})">
+                                                <x-ui.button type="button" variant="outline" size="md" class="border-status-danger-border text-status-danger hover:bg-status-danger-subtle" wire:click="deletePhoto({{ $photoReviewPhoto->id }})" wire:confirm="{{ __('Delete this photo and all its versions?') }}" wire:loading.attr="disabled" wire:target="deletePhoto({{ $photoReviewPhoto->id }})">
                                                     <x-icon name="heroicon-o-trash" class="h-4 w-4" />
                                                     {{ __('Delete') }}
                                                 </x-ui.button>
