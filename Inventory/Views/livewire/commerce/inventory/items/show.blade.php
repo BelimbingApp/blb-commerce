@@ -1094,7 +1094,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                             <div x-cloak x-show="photoRollSize !== 'small'" class="space-y-1 p-3">
                                                 <div class="min-w-0">
                                                     <p class="truncate text-sm font-medium text-ink">{{ $displayAsset->original_filename ?? __('Photo') }}</p>
-                                                    <p class="text-xs text-muted">{{ __('Listing version: :version', ['version' => $listingLabel]) }}</p>
+                                                    <p class="text-xs text-muted">{{ __('Version: :version', ['version' => $listingLabel]) }}</p>
                                                 </div>
                                             </div>
                                         </article>
@@ -1227,11 +1227,9 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                             'asset' => $reviewOriginalAsset,
                             'type' => 'original',
                             'selected' => $originalSelected,
-                            'subtitle' => __('Source image'),
                         ]])->merge($reviewCleanedAssets->map(function (\App\Base\Media\Models\MediaAsset $asset) use ($selectedCleanedAssetId): array {
                             $provider = data_get($asset->metadata, 'provider_label')
                                 ?: \Illuminate\Support\Str::headline((string) data_get($asset->metadata, 'provider', __('cleanup provider')));
-                            $cleanedAt = data_get($asset->metadata, 'cleaned_at');
 
                             return [
                                 'id' => 'cleaned-'.$asset->id,
@@ -1239,18 +1237,8 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                 'asset' => $asset,
                                 'type' => 'cleaned',
                                 'selected' => $selectedCleanedAssetId === $asset->id,
-                                'subtitle' => __('Cleaned :time', [
-                                    'time' => $cleanedAt ? \Illuminate\Support\Carbon::parse($cleanedAt)->diffForHumans() : __('recently'),
-                                ]),
                             ];
                         }))->values();
-                        $selectedReviewVersions = $reviewVersions->filter(fn (array $version): bool => (bool) $version['selected'])->values();
-                        $otherReviewVersions = $reviewVersions->reject(fn (array $version): bool => (bool) $version['selected'])->values();
-                        $reviewVersionTabs = $reviewVersions
-                            ->map(fn (array $version): array => ['id' => $version['id'], 'label' => $version['label']])
-                            ->values()
-                            ->all();
-                        $defaultReviewVersionId = $reviewCleanedAsset ? 'cleaned-'.$reviewCleanedAsset->id : 'original';
                         $unselectedCleanedVersionCount = $photoReviewPhoto->use_cleaned_photo && $selectedCleanedAsset instanceof \App\Base\Media\Models\MediaAsset
                             ? $reviewCleanedAssets->reject(fn (\App\Base\Media\Models\MediaAsset $asset): bool => $asset->id === $selectedCleanedAsset->id)->count()
                             : $reviewCleanedAssets->count();
@@ -1262,7 +1250,7 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                             class="space-y-4 p-card-inner"
                             x-data="{
                                 background: 'checker',
-                                zoomed: false,
+                                zoomedVersion: null,
                                 panelClass() {
                                     return this.background === 'dark' ? 'bg-surface-secondary' : 'bg-surface-card';
                                 },
@@ -1309,9 +1297,9 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                             </div>
 
                             @if ($reviewOriginalAsset instanceof \App\Base\Media\Models\MediaAsset)
-                                <div class="grid gap-5 2xl:grid-cols-[minmax(0,1fr)_21rem]">
-                                    <section class="min-w-0 space-y-4">
-                                        <x-ui.tabs :tabs="$reviewVersionTabs" :default="$defaultReviewVersionId" variant="pill" size="sm" persistence="none">
+                                <div class="space-y-4">
+                                    <div class="flex flex-wrap items-center justify-between gap-3 border-t border-border-default pt-4">
+                                        <div class="flex min-w-0 flex-wrap items-center gap-2">
                                             @foreach ($reviewVersions as $version)
                                                 @php
                                                     /** @var \App\Base\Media\Models\MediaAsset $versionAsset */
@@ -1319,135 +1307,12 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                                     $versionIsSelected = (bool) $version['selected'];
                                                 @endphp
 
-                                                <x-ui.tab :id="$version['id']" wire:key="photo-review-version-{{ $photoReviewPhoto->id }}-{{ $version['id'] }}">
-                                                    @if ($version['type'] === 'original')
-                                                        <section class="space-y-2">
-                                                            <div class="flex items-center justify-between gap-2">
-                                                                <h3 class="text-sm font-medium text-ink">{{ __('Original') }}</h3>
-                                                                @if ($versionIsSelected)
-                                                                    <span class="inline-flex items-center gap-1 text-xs font-medium text-status-success">
-                                                                        <x-icon name="heroicon-o-check" class="h-3.5 w-3.5" />
-                                                                        {{ __('Listing image') }}
-                                                                    </span>
-                                                                @endif
-                                                            </div>
-
-                                                            <div class="flex min-h-[18rem] items-center justify-center overflow-auto rounded-2xl border p-3 sm:min-h-[24rem] xl:min-h-[34rem] {{ $versionIsSelected ? 'border-accent ring-2 ring-accent/20' : 'border-border-default' }}" :class="panelClass()" :style="panelStyle()">
-                                                                <img
-                                                                    src="{{ $reviewOriginalAsset->displayUrl() }}"
-                                                                    alt="{{ __('Original photo: :filename', ['filename' => $reviewFilename]) }}"
-                                                                    class="max-h-[70vh] w-full object-contain transition-transform duration-150"
-                                                                    :class="zoomed ? 'scale-150 cursor-zoom-out' : 'cursor-zoom-in'"
-                                                                    @click="zoomed = ! zoomed"
-                                                                />
-                                                            </div>
-                                                        </section>
-                                                    @else
-                                                        <div class="grid gap-4 lg:grid-cols-2">
-                                                            <section class="order-2 space-y-2 lg:order-1">
-                                                                <div class="flex items-center justify-between gap-2">
-                                                                    <h3 class="text-sm font-medium text-ink">{{ __('Original') }}</h3>
-                                                                    @if ($originalSelected)
-                                                                        <span class="inline-flex items-center gap-1 text-xs font-medium text-status-success">
-                                                                            <x-icon name="heroicon-o-check" class="h-3.5 w-3.5" />
-                                                                            {{ __('Listing image') }}
-                                                                        </span>
-                                                                    @endif
-                                                                </div>
-
-                                                                <div class="flex min-h-[18rem] items-center justify-center overflow-auto rounded-2xl border p-3 sm:min-h-[24rem] xl:min-h-[34rem] {{ $originalSelected ? 'border-accent ring-2 ring-accent/20' : 'border-border-default' }}" :class="panelClass()" :style="panelStyle()">
-                                                                    <img
-                                                                        src="{{ $reviewOriginalAsset->displayUrl() }}"
-                                                                        alt="{{ __('Original photo: :filename', ['filename' => $reviewFilename]) }}"
-                                                                        class="max-h-[70vh] w-full object-contain transition-transform duration-150"
-                                                                        :class="zoomed ? 'scale-150 cursor-zoom-out' : 'cursor-zoom-in'"
-                                                                        @click="zoomed = ! zoomed"
-                                                                    />
-                                                                </div>
-                                                            </section>
-
-                                                            <section class="order-1 space-y-2 lg:order-2">
-                                                                <div class="flex items-center justify-between gap-2">
-                                                                    <h3 class="text-sm font-medium text-ink">{{ $version['label'] }}</h3>
-                                                                    @if ($versionIsSelected)
-                                                                        <span class="inline-flex items-center gap-1 text-xs font-medium text-status-success">
-                                                                            <x-icon name="heroicon-o-check" class="h-3.5 w-3.5" />
-                                                                            {{ __('Listing image') }}
-                                                                        </span>
-                                                                    @endif
-                                                                </div>
-
-                                                                <div class="flex min-h-[18rem] items-center justify-center overflow-auto rounded-2xl border p-3 sm:min-h-[24rem] xl:min-h-[34rem] {{ $versionIsSelected ? 'border-accent ring-2 ring-accent/20' : 'border-border-default' }}" :class="panelClass()" :style="panelStyle()">
-                                                                    <img
-                                                                        src="{{ $versionAsset->displayUrl() }}"
-                                                                        alt="{{ __('Cleaned photo: :filename', ['filename' => $versionAsset->original_filename ?? $reviewFilename]) }}"
-                                                                        class="max-h-[70vh] w-full object-contain transition-transform duration-150"
-                                                                        :class="zoomed ? 'scale-150 cursor-zoom-out' : 'cursor-zoom-in'"
-                                                                        @click="zoomed = ! zoomed"
-                                                                    />
-                                                                </div>
-                                                            </section>
-                                                        </div>
-                                                    @endif
-
-                                                    @if ($version['type'] === 'cleaned')
-                                                        <p class="mt-3 text-xs text-muted">
-                                                            {{ __('Cleaned :time via :provider. The original remains saved; choosing here only changes the one version marketplaces use.', [
-                                                                'time' => data_get($versionAsset->metadata, 'cleaned_at') ? \Illuminate\Support\Carbon::parse(data_get($versionAsset->metadata, 'cleaned_at'))->diffForHumans() : __('recently'),
-                                                                'provider' => $version['label'],
-                                                            ]) }}
-                                                        </p>
-                                                    @endif
-                                                </x-ui.tab>
-                                            @endforeach
-                                        </x-ui.tabs>
-                                    </section>
-
-                                    <aside class="space-y-4 rounded-2xl border border-border-default bg-surface-subtle p-4">
-                                        <section>
-                                            <h3 class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Photo') }}</h3>
-                                            <p class="mt-1 text-xs text-muted">{{ $photoReviewPhoto->selected_for_listing ? __('This source photo is listed with exactly one chosen version.') : __('This source photo stays with the item but is not published.') }}</p>
-
-                                            @if ($this->canEdit())
-                                                <div class="mt-3">
-                                                    <x-ui.button
-                                                        type="button"
-                                                        :variant="$photoReviewPhoto->selected_for_listing ? 'ghost' : 'outline'"
-                                                        size="sm"
-                                                        class="w-full"
-                                                        wire:click="setPhotoListingSelection({{ $photoReviewPhoto->id }}, {{ $photoReviewPhoto->selected_for_listing ? 'false' : 'true' }})"
-                                                        wire:loading.attr="disabled"
-                                                        wire:target="setPhotoListingSelection({{ $photoReviewPhoto->id }})"
-                                                    >
-                                                        @if ($photoReviewPhoto->selected_for_listing)
-                                                            {{ __('Unlist photo') }}
-                                                        @else
-                                                            <x-icon name="heroicon-o-check" class="h-4 w-4" />
-                                                            {{ __('List photo') }}
-                                                        @endif
-                                                    </x-ui.button>
-                                                </div>
-                                            @endif
-                                        </section>
-
-                                        <section class="border-t border-border-default pt-4">
-                                            <h3 class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Listing version') }}</h3>
-                                            <p class="mt-1 text-xs text-muted">{{ __('Choose the single version marketplaces use for this source photo.') }}</p>
-
-                                            <div class="mt-3 space-y-2">
-                                                @foreach ($selectedReviewVersions as $version)
-                                                    <div class="flex w-full items-center gap-2 rounded-full border border-accent bg-surface-card px-3 py-2 text-left shadow-sm ring-2 ring-accent/20">
-                                                        <x-icon name="heroicon-o-check" class="h-4 w-4 text-status-success" />
-                                                        <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">{{ $version['label'] }}</span>
-                                                        <span class="text-xs text-muted">{{ $version['subtitle'] }}</span>
-                                                    </div>
-                                                @endforeach
-
-                                                @foreach ($otherReviewVersions as $version)
-                                                    @php
-                                                        /** @var \App\Base\Media\Models\MediaAsset $versionAsset */
-                                                        $versionAsset = $version['asset'];
-                                                    @endphp
+                                                @if ($versionIsSelected)
+                                                    <span class="inline-flex max-w-full items-center gap-2 rounded-full border border-accent bg-surface-card px-3 py-2 text-sm font-medium text-ink shadow-sm ring-2 ring-accent/20">
+                                                        <x-icon name="heroicon-o-check" class="h-4 w-4 shrink-0 text-status-success" />
+                                                        <span class="truncate">{{ $version['label'] }}</span>
+                                                    </span>
+                                                @else
                                                     <button
                                                         type="button"
                                                         @if ($this->canEdit())
@@ -1456,33 +1321,45 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                                                 wire:target="revertCleanedPhoto({{ $photoReviewPhoto->id }})"
                                                             @else
                                                                 wire:click="acceptCleanedPhoto({{ $photoReviewPhoto->id }}, {{ $versionAsset->id }})"
-                                                                wire:target="acceptCleanedPhoto({{ $photoReviewPhoto->id }})"
+                                                                wire:target="acceptCleanedPhoto({{ $photoReviewPhoto->id }}, {{ $versionAsset->id }})"
                                                             @endif
                                                             wire:loading.attr="disabled"
                                                         @else
                                                             disabled
                                                         @endif
-                                                        class="flex w-full items-center gap-2 rounded-full border border-border-default bg-surface-card px-3 py-2 text-left transition-colors hover:border-accent hover:bg-surface-subtle disabled:cursor-default disabled:hover:border-border-default disabled:hover:bg-surface-card"
+                                                        class="inline-flex max-w-full items-center gap-2 rounded-full border border-border-default bg-surface-card px-3 py-2 text-sm font-medium text-ink transition-colors hover:border-accent hover:bg-surface-subtle focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-1 disabled:cursor-default disabled:opacity-60 disabled:hover:border-border-default disabled:hover:bg-surface-card"
                                                     >
-                                                        <span class="h-4 w-4 rounded-full border border-border-default"></span>
-                                                        <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">{{ $version['label'] }}</span>
-                                                        <span class="text-xs text-muted">{{ $version['subtitle'] }}</span>
+                                                        <span class="h-4 w-4 shrink-0 rounded-full border border-border-default"></span>
+                                                        <span class="truncate">{{ $version['label'] }}</span>
                                                     </button>
-                                                @endforeach
-                                            </div>
-                                        </section>
+                                                @endif
+                                            @endforeach
+                                        </div>
 
                                         @if ($this->canEdit())
-                                            <section class="border-t border-border-default pt-4">
-                                                <h3 class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Image operation') }}</h3>
-                                                <p class="mt-1 text-xs text-muted">{{ __('Run the active provider without changing the listing version.') }}</p>
+                                            <div class="flex flex-wrap items-center justify-end gap-2">
+                                                <x-ui.button
+                                                    type="button"
+                                                    :variant="$photoReviewPhoto->selected_for_listing ? 'ghost' : 'outline'"
+                                                    size="sm"
+                                                    wire:click="setPhotoListingSelection({{ $photoReviewPhoto->id }}, {{ $photoReviewPhoto->selected_for_listing ? 'false' : 'true' }})"
+                                                    wire:loading.attr="disabled"
+                                                    wire:target="setPhotoListingSelection({{ $photoReviewPhoto->id }})"
+                                                >
+                                                    @if ($photoReviewPhoto->selected_for_listing)
+                                                        {{ __('Unlist') }}
+                                                    @else
+                                                        <x-icon name="heroicon-o-check" class="h-4 w-4" />
+                                                        {{ __('List') }}
+                                                    @endif
+                                                </x-ui.button>
 
-                                                <div class="mt-3 grid gap-2 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)] sm:items-end 2xl:grid-cols-1">
-                                                    @if (count($photoCleanupProviders) > 1)
+                                                @if (count($photoCleanupProviders) > 1)
+                                                    <div class="w-44">
+                                                        <label for="photo-review-cleanup-provider" class="sr-only">{{ __('Provider') }}</label>
                                                         <x-ui.select
                                                             id="photo-review-cleanup-provider"
                                                             wire:change="setPhotoCleanupProvider($event.target.value)"
-                                                            label="{{ __('Provider') }}"
                                                         >
                                                             @foreach ($photoCleanupProviders as $cleanupProvider)
                                                                 <option value="{{ $cleanupProvider['key'] }}" @selected($cleanupProvider['active'])>
@@ -1490,48 +1367,58 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                                                 </option>
                                                             @endforeach
                                                         </x-ui.select>
-                                                    @elseif ($activeCleanupProviderLabel)
-                                                        <div>
-                                                            <p class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Provider') }}</p>
-                                                            <x-ui.badge class="mt-1">{{ $activeCleanupProviderLabel }}</x-ui.badge>
-                                                        </div>
-                                                    @endif
+                                                    </div>
+                                                @elseif ($activeCleanupProviderLabel)
+                                                    <x-ui.badge>{{ $activeCleanupProviderLabel }}</x-ui.badge>
+                                                @endif
 
-                                                    @if (! $hasPhotoCleanupProvider)
-                                                        <p class="text-xs text-muted sm:col-span-2 2xl:col-span-1">{{ __('Connect an image provider to run photo operations.') }}</p>
-                                                    @elseif ($canCleanWithActiveProvider || ! $reviewCleanedAsset)
-                                                        <x-ui.button type="button" variant="primary" size="sm" class="w-full" wire:click="runPhotoCleanup({{ $photoReviewPhoto->id }})" wire:loading.attr="disabled" wire:target="runPhotoCleanup({{ $photoReviewPhoto->id }})">
-                                                            <x-icon name="heroicon-o-sparkles" class="h-4 w-4" />
-                                                            {{ count($photoCleanupProviders) > 1 || ! $activeCleanupProviderLabel ? __('Remove background') : __('Remove background with :provider', ['provider' => $activeCleanupProviderLabel]) }}
-                                                        </x-ui.button>
-                                                    @else
-                                                        <p class="text-xs text-muted sm:col-span-2 2xl:col-span-1">
-                                                            {{ $activeCleanupProviderLabel
-                                                                ? __('This provider already has a cleaned version for this photo.')
-                                                                : __('Connect a provider to run image operations.') }}
-                                                        </p>
-                                                    @endif
-                                                </div>
-                                            </section>
-
-                                            <section class="border-t border-border-default pt-4">
-                                                <h3 class="text-[11px] font-semibold uppercase tracking-wider text-muted">{{ __('Cleanup') }}</h3>
-                                                <div class="mt-3 space-y-2">
-                                                    @if ($unselectedCleanedVersionCount > 0)
-                                                        <x-ui.button type="button" variant="outline" size="sm" class="w-full" wire:click="deleteUnselectedCleanedVersions({{ $photoReviewPhoto->id }})" wire:confirm="{{ __('Delete all cleaned versions that are not used by listings?') }}" wire:loading.attr="disabled" wire:target="deleteUnselectedCleanedVersions({{ $photoReviewPhoto->id }})">
-                                                            <x-icon name="heroicon-o-trash" class="h-4 w-4" />
-                                                            {{ __('Delete other cleaned versions') }}
-                                                        </x-ui.button>
-                                                    @endif
-
-                                                    <x-ui.button type="button" variant="danger" size="sm" class="w-full" wire:click="deletePhoto({{ $photoReviewPhoto->id }})" wire:confirm="{{ __('Delete this photo and all its versions?') }}" wire:loading.attr="disabled" wire:target="deletePhoto({{ $photoReviewPhoto->id }})">
-                                                        <x-icon name="heroicon-o-trash" class="h-4 w-4" />
-                                                        {{ __('Delete photo') }}
+                                                @if ($hasPhotoCleanupProvider && ($canCleanWithActiveProvider || ! $reviewCleanedAsset))
+                                                    <x-ui.button type="button" variant="primary" size="sm" wire:click="runPhotoCleanup({{ $photoReviewPhoto->id }})" wire:loading.attr="disabled" wire:target="runPhotoCleanup({{ $photoReviewPhoto->id }})">
+                                                        <x-icon name="heroicon-o-sparkles" class="h-4 w-4" />
+                                                        {{ __('Remove background') }}
                                                     </x-ui.button>
-                                                </div>
-                                            </section>
+                                                @endif
+
+                                                @if ($unselectedCleanedVersionCount > 0)
+                                                    <x-ui.button type="button" variant="outline" size="sm" wire:click="deleteUnselectedCleanedVersions({{ $photoReviewPhoto->id }})" wire:confirm="{{ __('Delete all cleaned versions that are not selected?') }}" wire:loading.attr="disabled" wire:target="deleteUnselectedCleanedVersions({{ $photoReviewPhoto->id }})">
+                                                        <x-icon name="heroicon-o-trash" class="h-4 w-4" />
+                                                        {{ __('Delete unused') }}
+                                                    </x-ui.button>
+                                                @endif
+
+                                                <x-ui.button type="button" variant="outline" size="sm" class="border-status-danger-border text-status-danger hover:bg-status-danger-subtle" wire:click="deletePhoto({{ $photoReviewPhoto->id }})" wire:confirm="{{ __('Delete this photo and all its versions?') }}" wire:loading.attr="disabled" wire:target="deletePhoto({{ $photoReviewPhoto->id }})">
+                                                    <x-icon name="heroicon-o-trash" class="h-4 w-4" />
+                                                    {{ __('Delete') }}
+                                                </x-ui.button>
+                                            </div>
                                         @endif
-                                    </aside>
+                                    </div>
+
+                                    <section>
+                                        <div @class(['grid gap-4', 'lg:grid-cols-2 xl:grid-cols-3' => $reviewVersions->count() > 1])>
+                                            @foreach ($reviewVersions as $version)
+                                                @php
+                                                    /** @var \App\Base\Media\Models\MediaAsset $versionAsset */
+                                                    $versionAsset = $version['asset'];
+                                                    $versionIsSelected = (bool) $version['selected'];
+                                                @endphp
+
+                                                <article class="space-y-2" wire:key="photo-review-compare-{{ $photoReviewPhoto->id }}-{{ $version['id'] }}">
+                                                    <h3 class="truncate text-base font-medium tracking-tight text-ink">{{ $version['label'] }}</h3>
+
+                                                    <div class="flex min-h-[18rem] items-center justify-center overflow-auto rounded-2xl border p-3 sm:min-h-[24rem] 2xl:min-h-[30rem] {{ $versionIsSelected ? 'border-accent ring-2 ring-accent/20' : 'border-border-default' }}" :class="panelClass()" :style="panelStyle()">
+                                                        <img
+                                                            src="{{ $versionAsset->displayUrl() }}"
+                                                            alt="{{ __('Photo version :version: :filename', ['version' => $version['label'], 'filename' => $versionAsset->original_filename ?? $reviewFilename]) }}"
+                                                            class="max-h-[70vh] w-full object-contain transition-transform duration-150"
+                                                            :class="zoomedVersion === @js($version['id']) ? 'scale-150 cursor-zoom-out' : 'cursor-zoom-in'"
+                                                            @click="zoomedVersion = zoomedVersion === @js($version['id']) ? null : @js($version['id'])"
+                                                        />
+                                                    </div>
+                                                </article>
+                                            @endforeach
+                                        </div>
+                                    </section>
                                 </div>
                             @else
                                 <x-ui.alert variant="warning">{{ __('The selected photo file is missing.') }}</x-ui.alert>
