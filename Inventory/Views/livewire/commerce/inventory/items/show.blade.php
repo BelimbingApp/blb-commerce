@@ -971,6 +971,8 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                         <x-ui.select
                                             id="photo-batch-cleanup-provider"
                                             wire:change="setPhotoCleanupProvider($event.target.value)"
+                                            wire:loading.attr="disabled"
+                                            wire:target="runPhotoCleanupBatch"
                                             label="{{ __('Provider') }}"
                                         >
                                             @foreach ($photoCleanupProviders as $cleanupProvider)
@@ -992,8 +994,14 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                         wire:target="runPhotoCleanupBatch"
                                         title="{{ __('Remove the background from every photo that does not already have a version from the active provider.') }}"
                                     >
-                                        <x-icon name="heroicon-o-sparkles" class="h-4 w-4" />
-                                        {{ count($photoCleanupProviders) > 1 || ! $activeCleanupProviderLabel ? __('Clean all') : __('Clean all with :provider', ['provider' => $activeCleanupProviderLabel]) }}
+                                        <x-icon name="heroicon-o-sparkles" class="h-4 w-4" wire:loading.remove wire:target="runPhotoCleanupBatch" />
+                                        <x-icon name="heroicon-o-arrow-path" class="h-4 w-4 animate-spin" wire:loading wire:target="runPhotoCleanupBatch" />
+                                        <span wire:loading.remove wire:target="runPhotoCleanupBatch">
+                                            {{ count($photoCleanupProviders) > 1 || ! $activeCleanupProviderLabel ? __('Clean all') : __('Clean all with :provider', ['provider' => $activeCleanupProviderLabel]) }}
+                                        </span>
+                                        <span wire:loading wire:target="runPhotoCleanupBatch">
+                                            {{ $activeCleanupProviderLabel ? __(':provider processing…', ['provider' => $activeCleanupProviderLabel]) : __('Processing…') }}
+                                        </span>
                                     </x-ui.button>
                                 @endif
                             </div>
@@ -1363,6 +1371,8 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                                         <x-ui.select
                                                             id="photo-review-cleanup-provider"
                                                             wire:change="setPhotoCleanupProvider($event.target.value)"
+                                                            wire:loading.attr="disabled"
+                                                            wire:target="runPhotoCleanup({{ $photoReviewPhoto->id }})"
                                                             class="h-9"
                                                         >
                                                             @foreach ($photoCleanupProviders as $cleanupProvider)
@@ -1378,8 +1388,12 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
 
                                                 @if ($hasPhotoCleanupProvider && ($canCleanWithActiveProvider || ! $reviewCleanedAsset))
                                                     <x-ui.button type="button" variant="primary" size="md" wire:click="runPhotoCleanup({{ $photoReviewPhoto->id }})" wire:loading.attr="disabled" wire:target="runPhotoCleanup({{ $photoReviewPhoto->id }})">
-                                                        <x-icon name="heroicon-o-sparkles" class="h-4 w-4" />
-                                                        {{ __('Remove background') }}
+                                                        <x-icon name="heroicon-o-sparkles" class="h-4 w-4" wire:loading.remove wire:target="runPhotoCleanup({{ $photoReviewPhoto->id }})" />
+                                                        <x-icon name="heroicon-o-arrow-path" class="h-4 w-4 animate-spin" wire:loading wire:target="runPhotoCleanup({{ $photoReviewPhoto->id }})" />
+                                                        <span wire:loading.remove wire:target="runPhotoCleanup({{ $photoReviewPhoto->id }})">{{ __('Remove background') }}</span>
+                                                        <span wire:loading wire:target="runPhotoCleanup({{ $photoReviewPhoto->id }})">
+                                                            {{ $activeCleanupProviderLabel ? __(':provider processing…', ['provider' => $activeCleanupProviderLabel]) : __('Processing…') }}
+                                                        </span>
                                                     </x-ui.button>
                                                 @endif
 
