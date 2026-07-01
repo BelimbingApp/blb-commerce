@@ -1317,7 +1317,6 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                             class="space-y-4 p-card-inner"
                             x-data="{
                                 background: 'checker',
-                                zoomedVersion: null,
                                 panelClass() {
                                     return this.background === 'dark' ? 'bg-surface-secondary' : 'bg-surface-card';
                                 },
@@ -1343,6 +1342,30 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                         {{ __('Next') }}
                                         <x-icon name="heroicon-o-chevron-right" class="h-4 w-4" />
                                     </x-ui.button>
+
+                                    @if ($this->canEdit())
+                                        <x-ui.button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            wire:click="setPhotoListingSelection({{ $photoReviewPhoto->id }}, {{ $photoReviewPhoto->selected_for_listing ? 'false' : 'true' }})"
+                                            wire:loading.attr="disabled"
+                                            wire:target="setPhotoListingSelection({{ $photoReviewPhoto->id }})"
+                                            class="{{ $photoReviewPhoto->selected_for_listing ? 'border-status-success-border text-status-success hover:bg-status-success-subtle' : 'hover:bg-surface-subtle' }}"
+                                        >
+                                            @if ($photoReviewPhoto->selected_for_listing)
+                                                <x-icon name="heroicon-o-check" class="h-4 w-4" wire:loading.remove wire:target="setPhotoListingSelection({{ $photoReviewPhoto->id }})" />
+                                            @endif
+                                            <x-icon name="heroicon-o-arrow-path" class="h-4 w-4 animate-spin" wire:loading wire:target="setPhotoListingSelection({{ $photoReviewPhoto->id }})" />
+                                            {{ $photoReviewPhoto->selected_for_listing ? __('Listed') : __('List photo') }}
+                                        </x-ui.button>
+                                    @elseif ($photoReviewPhoto->selected_for_listing)
+                                        <x-ui.badge variant="success">
+                                            <x-icon name="heroicon-o-check" class="h-3.5 w-3.5" />
+                                            {{ __('Listed') }}
+                                        </x-ui.badge>
+                                    @endif
+
                                     <x-ui.button type="button" variant="ghost" size="sm" wire:click="closePhotoReview">
                                         {{ __('Close') }}
                                     </x-ui.button>
@@ -1475,18 +1498,85 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
                                                     /** @var \App\Base\Media\Models\MediaAsset $versionAsset */
                                                     $versionAsset = $version['asset'];
                                                     $versionIsSelected = (bool) $version['selected'];
+                                                    $zoomBtnClass = 'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-surface-subtle hover:text-ink focus:outline-none focus:ring-2 focus:ring-accent';
+                                                    $zoomBtnDisabledClass = 'disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted';
                                                 @endphp
 
-                                                <article class="space-y-2" wire:key="photo-review-compare-{{ $photoReviewPhoto->id }}-{{ $version['id'] }}">
-                                                    <h3 class="truncate text-base font-medium tracking-tight text-ink">{{ $version['label'] }}</h3>
+                                                <article
+                                                    class="space-y-2"
+                                                    wire:key="photo-review-compare-{{ $photoReviewPhoto->id }}-{{ $version['id'] }}"
+                                                    x-data="photoZoom({
+                                                        canEdit: @js($this->canEdit()),
+                                                        isSelected: @js($versionIsSelected),
+                                                        versionType: @js($version['type']),
+                                                        photoId: {{ $photoReviewPhoto->id }},
+                                                        assetId: @js($versionAsset?->id),
+                                                        listed: @js($photoReviewPhoto->selected_for_listing),
+                                                    })"
+                                                >
+                                                    <div class="flex items-center justify-between gap-2">
+                                                        <h3 class="truncate text-base font-medium tracking-tight text-ink">{{ $version['label'] }}</h3>
+                                                        <div class="flex shrink-0 items-center gap-0.5 text-muted" :class="zoomed ? 'opacity-100' : 'opacity-60 hover:opacity-100'">
+                                                            <button
+                                                                type="button"
+                                                                x-on:click.stop="zoomOut()"
+                                                                :disabled="scale <= minScale"
+                                                                title="{{ __('Zoom out') }}"
+                                                                class="{{ $zoomBtnClass }} {{ $zoomBtnDisabledClass }}"
+                                                            >
+                                                                <x-icon name="heroicon-o-magnifying-glass-minus" class="h-4 w-4" />
+                                                                <span class="sr-only">{{ __('Zoom out') }}</span>
+                                                            </button>
+                                                            <span class="w-10 text-center text-xs tabular-nums" x-text="zoomLabel()" :class="zoomed ? 'text-ink' : 'text-muted'"></span>
+                                                            <button
+                                                                type="button"
+                                                                x-on:click.stop="zoomIn()"
+                                                                :disabled="scale >= maxScale"
+                                                                title="{{ __('Zoom in') }}"
+                                                                class="{{ $zoomBtnClass }} {{ $zoomBtnDisabledClass }}"
+                                                            >
+                                                                <x-icon name="heroicon-o-magnifying-glass-plus" class="h-4 w-4" />
+                                                                <span class="sr-only">{{ __('Zoom in') }}</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                x-on:click.stop="reset()"
+                                                                x-show="zoomed"
+                                                                x-cloak
+                                                                title="{{ __('Reset zoom') }}"
+                                                                class="{{ $zoomBtnClass }}"
+                                                            >
+                                                                <x-icon name="heroicon-o-arrows-pointing-in" class="h-4 w-4" />
+                                                                <span class="sr-only">{{ __('Reset zoom') }}</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
 
-                                                    <div class="flex min-h-[18rem] items-center justify-center overflow-auto rounded-2xl border p-3 sm:min-h-[24rem] 2xl:min-h-[30rem] {{ $versionIsSelected ? 'border-accent ring-2 ring-accent/20' : 'border-border-default' }}" :class="panelClass()" :style="panelStyle()">
+                                                    <div
+                                                        x-ref="stage"
+                                                        class="relative flex min-h-[18rem] items-center justify-center overflow-hidden rounded-2xl border p-3 sm:min-h-[24rem] 2xl:min-h-[30rem] {{ $versionIsSelected ? 'border-accent ring-2 ring-accent/20' : 'border-border-default' }}"
+                                                        :class="panelClass()"
+                                                        :style="panelStyle()"
+                                                    >
                                                         <img
+                                                            x-ref="img"
                                                             src="{{ $versionAsset->displayUrl() }}"
                                                             alt="{{ __('Photo version :version: :filename', ['version' => $version['label'], 'filename' => $versionAsset->original_filename ?? $reviewFilename]) }}"
-                                                            class="max-h-[70vh] w-full object-contain transition-transform duration-150"
-                                                            :class="zoomedVersion === @js($version['id']) ? 'scale-150 cursor-zoom-out' : 'cursor-zoom-in'"
-                                                            @click="zoomedVersion = zoomedVersion === @js($version['id']) ? null : @js($version['id'])"
+                                                            draggable="false"
+                                                            class="max-h-[70vh] w-full select-none touch-none object-contain"
+                                                            :class="zoomed ? (panning ? 'cursor-grabbing' : 'cursor-grab') : (canEdit ? 'cursor-pointer' : 'cursor-default')"
+                                                            :style="imgStyle()"
+                                                            @if ($this->canEdit())
+                                                                title="{{ $versionIsSelected
+                                                                    ? ($photoReviewPhoto->selected_for_listing ? __('Listed — click to unlist this photo') : __('Click to list this photo'))
+                                                                    : ($version['type'] === 'original' ? __('Click to use the original') : __('Click to use this cleaned version')) }}"
+                                                            @endif
+                                                            x-on:click="select()"
+                                                            x-on:wheel.prevent="onWheel($event)"
+                                                            x-on:pointerdown="onPointerDown($event)"
+                                                            x-on:pointermove="onPointerMove($event)"
+                                                            x-on:pointerup="onPointerUp($event)"
+                                                            x-on:pointercancel="onPointerUp($event)"
                                                         />
                                                     </div>
                                                 </article>
@@ -1504,4 +1594,186 @@ use App\Modules\Commerce\Inventory\Livewire\Items\Show;
         </x-ui.tab>
         </x-ui.tabs>
     </div>
+
+    <script>
+document.addEventListener('alpine:init', () => {
+    /**
+     * Per-image zoom + pan controller for the photo review modal.
+     * Wheel/zoom buttons zoom toward a focal point; one-finger drag pans when
+     * zoomed; two-finger pinch zooms toward the midpoint. A plain click (no
+     * movement) selects the version for the listing, or toggles listing when
+     * the version is already selected. Read-only viewers get zoom only.
+     */
+    Alpine.data('photoZoom', (config = {}) => ({
+        canEdit: config.canEdit ?? false,
+        isSelected: config.isSelected ?? false,
+        versionType: config.versionType ?? 'original',
+        photoId: config.photoId ?? null,
+        assetId: config.assetId ?? null,
+        listed: config.listed ?? false,
+
+        minScale: 1,
+        maxScale: 5,
+        scale: 1,
+        tx: 0,
+        ty: 0,
+
+        pointers: new Map(),
+        panning: false,
+        moved: false,
+        lastX: 0,
+        lastY: 0,
+        lastPinchDist: 0,
+
+        get zoomed() { return this.scale > 1.0001; },
+
+        imgStyle() {
+            return `transform: translate(${this.tx}px, ${this.ty}px) scale(${this.scale}); transform-origin: 50% 50%;`;
+        },
+
+        zoomLabel() {
+            return Math.round(this.scale * 100) + '%';
+        },
+
+        imgSize() {
+            const img = this.$refs.img;
+            return { w: img?.clientWidth || 1, h: img?.clientHeight || 1 };
+        },
+
+        clamp() {
+            if (this.scale < this.minScale) this.scale = this.minScale;
+            if (this.scale > this.maxScale) this.scale = this.maxScale;
+            if (this.scale <= this.minScale) {
+                this.tx = 0;
+                this.ty = 0;
+                return;
+            }
+            const { w, h } = this.imgSize();
+            const maxX = ((this.scale - 1) * w) / 2;
+            const maxY = ((this.scale - 1) * h) / 2;
+            this.tx = Math.min(maxX, Math.max(-maxX, this.tx));
+            this.ty = Math.min(maxY, Math.max(-maxY, this.ty));
+        },
+
+        applyZoom(newScale, focalX, focalY) {
+            const oldScale = this.scale;
+            newScale = Math.min(this.maxScale, Math.max(this.minScale, newScale));
+            if (newScale === oldScale) return;
+            const { w, h } = this.imgSize();
+            // Keep the focal point (relative to the image box) fixed: with
+            // transform-origin at center, translate delta = (focal - center) * (old - new).
+            this.tx += (focalX - w / 2) * (oldScale - newScale);
+            this.ty += (focalY - h / 2) * (oldScale - newScale);
+            this.scale = newScale;
+            this.clamp();
+        },
+
+        zoomIn() {
+            const { w, h } = this.imgSize();
+            this.applyZoom(this.scale * 1.25, w / 2, h / 2);
+        },
+
+        zoomOut() {
+            const { w, h } = this.imgSize();
+            this.applyZoom(this.scale / 1.25, w / 2, h / 2);
+        },
+
+        reset() {
+            this.scale = 1;
+            this.tx = 0;
+            this.ty = 0;
+            this.panning = false;
+        },
+
+        onWheel(e) {
+            const rect = this.$refs.img.getBoundingClientRect();
+            // rect is the transformed box; convert to layout coordinates.
+            const focalX = (e.clientX - rect.left) / this.scale;
+            const focalY = (e.clientY - rect.top) / this.scale;
+            const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+            this.applyZoom(this.scale * factor, focalX, focalY);
+        },
+
+        dist(a, b) {
+            return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+        },
+
+        onPointerDown(e) {
+            // Ignore secondary buttons / synthetic touches.
+            if (e.button && e.button !== 0) return;
+            this.pointers.set(e.pointerId, e);
+            this.moved = false;
+            try { this.$refs.img.setPointerCapture(e.pointerId); } catch (_) {}
+            if (this.pointers.size === 2) {
+                const [a, b] = [...this.pointers.values()];
+                this.lastPinchDist = this.dist(a, b);
+                this.panning = false;
+            } else if (this.pointers.size === 1) {
+                this.lastX = e.clientX;
+                this.lastY = e.clientY;
+                this.panning = this.zoomed;
+            }
+        },
+
+        onPointerMove(e) {
+            if (!this.pointers.has(e.pointerId)) return;
+            this.pointers.set(e.pointerId, e);
+
+            if (this.pointers.size >= 2) {
+                const [a, b] = [...this.pointers.values()];
+                const d = this.dist(a, b);
+                if (this.lastPinchDist > 0 && d > 0) {
+                    const rect = this.$refs.img.getBoundingClientRect();
+                    const focalX = ((a.clientX + b.clientX) / 2 - rect.left) / this.scale;
+                    const focalY = ((a.clientY + b.clientY) / 2 - rect.top) / this.scale;
+                    this.applyZoom(this.scale * (d / this.lastPinchDist), focalX, focalY);
+                }
+                this.lastPinchDist = d;
+                this.moved = true;
+                return;
+            }
+
+            const dx = e.clientX - this.lastX;
+            const dy = e.clientY - this.lastY;
+            if (Math.abs(dx) + Math.abs(dy) > 2) this.moved = true;
+            if (this.panning) {
+                this.tx += dx;
+                this.ty += dy;
+                this.clamp();
+            }
+            this.lastX = e.clientX;
+            this.lastY = e.clientY;
+        },
+
+        onPointerUp(e) {
+            this.pointers.delete(e.pointerId);
+            try { this.$refs.img.releasePointerCapture(e.pointerId); } catch (_) {}
+            if (this.pointers.size < 2) this.lastPinchDist = 0;
+            if (this.pointers.size === 1) {
+                const [p] = [...this.pointers.values()];
+                this.lastX = p.clientX;
+                this.lastY = p.clientY;
+                this.panning = this.zoomed;
+            } else if (this.pointers.size === 0) {
+                this.panning = false;
+            }
+        },
+
+        select() {
+            if (this.moved) {
+                this.moved = false;
+                return;
+            }
+            if (!this.canEdit) return;
+            if (this.isSelected) {
+                this.$wire.setPhotoListingSelection(this.photoId, !this.listed);
+            } else if (this.versionType === 'original') {
+                this.$wire.revertCleanedPhoto(this.photoId);
+            } else if (this.assetId !== null) {
+                this.$wire.acceptCleanedPhoto(this.photoId, this.assetId);
+            }
+        },
+    }));
+});
+    </script>
 </div>
