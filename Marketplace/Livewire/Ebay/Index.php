@@ -6,18 +6,22 @@ use App\Base\Authz\Contracts\AuthorizationService;
 use App\Base\Authz\DTO\Actor;
 use App\Base\Foundation\Livewire\Concerns\InteractsWithNotifications;
 use App\Base\Foundation\ValueObjects\Money;
+use App\Base\Settings\Contracts\SettingsService;
+use App\Base\Settings\DTO\Scope;
 use App\Modules\Commerce\Inventory\Models\Item;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayListingAuditService;
 use App\Modules\Commerce\Marketplace\Ebay\EbayMarketplaceChannel;
 use App\Modules\Commerce\Marketplace\Ebay\EbayOAuthService;
 use App\Modules\Commerce\Marketplace\Jobs\AdoptListingsJob;
+use App\Modules\Commerce\Marketplace\Jobs\PullFromEbayJob;
 use App\Modules\Commerce\Marketplace\Models\Listing;
 use App\Modules\Commerce\Marketplace\Services\ListingAdoptionService;
 use App\Modules\Commerce\Marketplace\Services\MarketplaceListingPushService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -59,6 +63,19 @@ class Index extends Component
      * @var list<string>
      */
     public array $selectedImportIds = [];
+
+    public function mount(SettingsService $settings): void
+    {
+        $lastPullNotice = $this->consumeLastPullNotice($settings, $this->companyId());
+
+        if ($lastPullNotice !== null) {
+            match ($lastPullNotice['status']) {
+                'success' => $this->notify($lastPullNotice['message']),
+                'error' => $this->notifyError($lastPullNotice['message']),
+                default => null,
+            };
+        }
+    }
 
     public function updatedSearch(): void
     {
@@ -166,50 +183,24 @@ class Index extends Component
      * the live active set (Trading API) adds legacy listings the Inventory pull
      * cannot see and retires ones no longer active — so the table mirrors eBay.
      */
-    public function pullFromEbay(EbayMarketplaceChannel $channel): void
+    public function pullFromEbay(): void
     {
         $this->authorizeSyncRun();
 
-        $companyId = $this->companyId();
-
         try {
-            $listings = $channel->pullListings($companyId);
-            $orders = $channel->pullOrders($companyId);
+            // Never run inline: sync queue + dispatch() would replay the whole pull in
+            // this Livewire request and trip Cloudflare's origin timeout. Push to the
+            // database queue only after the HTTP response has been sent.
+            PullFromEbayJob::dispatch($this->companyId())
+                ->onConnection('database')
+                ->afterResponse();
         } catch (Throwable $exception) {
-            $this->notifyError($exception->getMessage());
+            $this->notifyError(__('Could not queue the eBay pull: :message', ['message' => $exception->getMessage()]));
 
             return;
         }
 
-        // Mirror the full active set; best-effort so a Trading API hiccup never
-        // breaks the Inventory pull + orders above.
-        $reconcileNote = '';
-
-        try {
-            $reconcile = $channel->reconcileSellerListings($companyId);
-            $reconcileNote = ' '.__('Mirrored :active live listing(s) (:created new, :ended ended).', [
-                'active' => $reconcile->active,
-                'created' => $reconcile->created,
-                'ended' => $reconcile->ended,
-            ]);
-
-            if (! $reconcile->complete) {
-                $reconcileNote .= ' '.__('Partial set — older listings were not retired.');
-            }
-        } catch (Throwable $exception) {
-            $reconcileNote = ' '.__('Listing mirror skipped: :message', ['message' => $exception->getMessage()]);
-        }
-
-        $this->notify(__(
-            'Pulled from eBay — :listingsFetched listings (:listingsCreated new, :listingsUpdated updated) and :ordersFetched orders (:ordersCreated new).',
-            [
-                'listingsFetched' => $listings->fetched,
-                'listingsCreated' => $listings->created,
-                'listingsUpdated' => $listings->updated,
-                'ordersFetched' => $orders->fetched,
-                'ordersCreated' => $orders->created,
-            ],
-        ).$reconcileNote);
+        $this->notify(__('Pull from eBay queued — refresh this page in a minute to see updated listings.'));
     }
 
     public function openImportModal(): void
@@ -511,5 +502,33 @@ class Index extends Component
     private function audit(): EbayListingAuditService
     {
         return app(EbayListingAuditService::class);
+    }
+
+    /**
+     * @return array{status: string, message: string}|null
+     */
+    private function consumeLastPullNotice(SettingsService $settings, int $companyId): ?array
+    {
+        $scope = Scope::company($companyId);
+        $status = $settings->get('commerce.marketplace.ebay.last_pull_status', null, $scope);
+        $message = $settings->get('commerce.marketplace.ebay.last_pull_message', null, $scope);
+        $pulledAt = $settings->get('commerce.marketplace.ebay.last_pull_at', null, $scope);
+
+        if (! is_string($status) || ! is_string($message) || ! is_string($pulledAt) || trim($message) === '') {
+            return null;
+        }
+
+        $settings->set('commerce.marketplace.ebay.last_pull_status', null, $scope);
+        $settings->set('commerce.marketplace.ebay.last_pull_message', null, $scope);
+        $settings->set('commerce.marketplace.ebay.last_pull_at', null, $scope);
+
+        if (Carbon::parse($pulledAt)->lt(Carbon::now()->subDay())) {
+            return null;
+        }
+
+        return [
+            'status' => $status,
+            'message' => $message,
+        ];
     }
 }

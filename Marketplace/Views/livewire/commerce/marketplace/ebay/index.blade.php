@@ -58,7 +58,7 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                         <x-ui.button type="button" variant="outline" wire:click="pullFromEbay" wire:loading.attr="disabled" wire:target="pullFromEbay">
                             <x-icon name="heroicon-o-arrow-down-tray" class="h-4 w-4" />
                             <span wire:loading.remove wire:target="pullFromEbay">{{ __('Pull from eBay') }}</span>
-                            <span wire:loading wire:target="pullFromEbay">{{ __('Pulling…') }}</span>
+                            <span wire:loading wire:target="pullFromEbay">{{ __('Queueing…') }}</span>
                         </x-ui.button>
 
                         <x-ui.button type="button" variant="ghost" wire:click="openImportModal" title="{{ __('Pick from your eBay store — including listings the normal pull cannot see') }}">

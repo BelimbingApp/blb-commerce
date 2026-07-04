@@ -14,6 +14,7 @@ use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayMarketplaceChannel;
 use App\Modules\Commerce\Marketplace\Ebay\EbayMetadataService;
 use App\Modules\Commerce\Marketplace\Ebay\EbayTradingService;
+use App\Modules\Commerce\Marketplace\Jobs\PullFromEbayJob;
 use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index as MarketplaceIndex;
 use App\Modules\Commerce\Marketplace\Livewire\Ebay\Settings as EbaySettings;
 use App\Modules\Commerce\Marketplace\Models\AccountResource;
@@ -22,6 +23,7 @@ use App\Modules\Commerce\Marketplace\Models\Listing;
 use App\Modules\Commerce\Marketplace\Models\ListingDraft;
 use App\Modules\Commerce\Marketplace\Models\MarketplaceMetadata;
 use App\Modules\Commerce\Marketplace\Models\ProductReference;
+use App\Modules\Commerce\Marketplace\Services\EbayStorePullService;
 use App\Modules\Commerce\Marketplace\Services\MarketplaceChannelRegistry;
 use App\Modules\Commerce\Plugins\Services\CommercePluginRegistry;
 use App\Modules\Commerce\Sales\Models\Order;
@@ -29,6 +31,7 @@ use App\Modules\Commerce\Sales\Models\OrderLine;
 use App\Modules\Commerce\Sales\Models\Sale;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Livewire\Livewire;
 
@@ -532,7 +535,22 @@ test('ebay marketplace lists imported listings and omits the reconciliation dash
         ->assertDontSee('Ready to Adopt');
 });
 
-test('ebay marketplace pull from eBay fetches listings and orders in one action', function (): void {
+test('ebay marketplace pull from eBay queues a background job', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    Bus::fake();
+
+    Livewire::actingAs($user)
+        ->test(MarketplaceIndex::class)
+        ->call('pullFromEbay')
+        ->assertHasNoErrors()
+        ->assertDispatched('notify', fn ($event, $params) => str_contains((string) ($params['message'] ?? ''), 'queued'));
+
+    Bus::assertDispatched(PullFromEbayJob::class, fn (PullFromEbayJob $job): bool => $job->companyId === $user->company_id);
+});
+
+test('ebay store pull fetches listings orders and mirrors the active set', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);
 
@@ -548,11 +566,9 @@ test('ebay marketplace pull from eBay fetches listings and orders in one action'
         'https://api.sandbox.ebay.com/ws/api.dll' => Http::response(ebayMyEbaySellingEmptyXml(), 200, ['Content-Type' => 'text/xml']),
     ]);
 
-    Livewire::actingAs($user)
-        ->test(MarketplaceIndex::class)
-        ->call('pullFromEbay')
-        ->assertHasNoErrors()
-        ->assertDispatched('notify', fn ($event, $params) => str_contains((string) ($params['message'] ?? ''), 'Pulled from eBay'));
+    $result = app(EbayStorePullService::class)->pull($user->company_id);
+
+    expect($result->notificationMessage())->toContain('Pulled from eBay');
 
     // One operator action covers the store: Inventory listings, the live active-set
     // mirror (Trading API), and orders.
