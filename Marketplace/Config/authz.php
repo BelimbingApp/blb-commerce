@@ -9,4 +9,14 @@ return [
         'commerce.marketplace.execute',
         'commerce.marketplace.manage',
     ],
+
+    'roles' => [
+        'tenant_owner' => [
+            'capabilities' => [
+                'commerce.marketplace.list',
+                'commerce.marketplace.execute',
+                'commerce.marketplace.manage',
+            ],
+        ],
+    ],
 ];

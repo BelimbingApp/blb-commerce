@@ -8,4 +8,13 @@ return [
         'commerce.catalog.manage',
         'commerce.catalog.view',
     ],
+
+    'roles' => [
+        'tenant_owner' => [
+            'capabilities' => [
+                'commerce.catalog.manage',
+                'commerce.catalog.view',
+            ],
+        ],
+    ],
 ];

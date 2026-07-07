@@ -11,4 +11,16 @@ return [
         'commerce.inventory.item.view',
         'commerce.inventory.manage',
     ],
+
+    'roles' => [
+        'tenant_owner' => [
+            'capabilities' => [
+                'commerce.inventory.item.create',
+                'commerce.inventory.item.list',
+                'commerce.inventory.item.update',
+                'commerce.inventory.item.view',
+                'commerce.inventory.manage',
+            ],
+        ],
+    ],
 ];
