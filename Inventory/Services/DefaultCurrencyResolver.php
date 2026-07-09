@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Inventory\Services;
 
 use App\Base\Settings\Contracts\SettingsService;

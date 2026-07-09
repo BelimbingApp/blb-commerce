@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Marketplace\Console\Commands;
 
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;

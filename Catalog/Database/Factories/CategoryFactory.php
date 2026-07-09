@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Catalog\Database\Factories;
 
 use App\Modules\Commerce\Catalog\Models\Category;

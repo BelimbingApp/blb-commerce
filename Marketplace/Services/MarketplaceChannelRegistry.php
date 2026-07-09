@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Marketplace\Services;
 
 use App\Modules\Commerce\Marketplace\Contracts\MarketplaceChannel;

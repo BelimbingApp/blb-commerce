@@ -1,4 +1,5 @@
 <?php
+
 return [
     'domains' => [
         'commerce' => 'Commerce, catalog, inventory, marketplace, and sales operations',

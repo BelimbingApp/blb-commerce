@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Sales\DTO;
 
 use App\Modules\Commerce\Sales\Models\Sale;

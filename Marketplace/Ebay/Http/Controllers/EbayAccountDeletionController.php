@@ -26,6 +26,15 @@ use Illuminate\Http\Request;
  */
 class EbayAccountDeletionController
 {
+    private const MAX_LOGGED_TOPIC_BYTES = 120;
+
+    /**
+     * Cap on the notification body written to the log. eBay's payloads are
+     * small; bounding what we persist stops an unauthenticated caller from
+     * filling the disk by POSTing large bodies to this public endpoint.
+     */
+    private const MAX_LOGGED_BODY_BYTES = 4096;
+
     public function __invoke(Request $request, SettingsService $settings): JsonResponse
     {
         $token = (string) $settings->get('commerce.marketplace.ebay.deletion_verification_token', '');
@@ -51,10 +60,33 @@ class EbayAccountDeletionController
             ]);
         }
 
-        blb_log_var($request->json()->all(), 'ebay-account-deletion.log', [
-            'ebay_signature' => $request->header('x-ebay-signature'),
-        ]);
+        // The endpoint is public and unauthenticated (eBay cannot carry a CSRF
+        // token), so an attacker can POST arbitrary bodies. We must still ack
+        // with 200 — eBay flags the keyset when acknowledgements fail — but we
+        // never trust the payload: real line breaks are stripped so a crafted
+        // body cannot forge log lines, and the body is size-capped so it cannot
+        // exhaust the disk. Full cryptographic verification of x-ebay-signature
+        // is tracked as residual hardening (needs eBay's live public key).
+        $rawBody = (string) $request->getContent();
+
+        blb_log_var(
+            'eBay account-deletion notification received.',
+            'ebay-account-deletion.log',
+            [
+                'topic' => self::singleLineForLog((string) $request->json('metadata.topic', ''), self::MAX_LOGGED_TOPIC_BYTES),
+                'body' => self::singleLineForLog($rawBody, self::MAX_LOGGED_BODY_BYTES),
+                'body_bytes' => strlen($rawBody),
+                'ebay_signature_present' => $request->hasHeader('x-ebay-signature'),
+            ],
+        );
 
         return response()->json(['received' => true]);
+    }
+
+    private static function singleLineForLog(string $value, int $maxBytes): string
+    {
+        $singleLine = (string) preg_replace('/[\r\n]+/', ' ', $value);
+
+        return substr($singleLine, 0, $maxBytes);
     }
 }

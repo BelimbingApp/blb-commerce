@@ -191,7 +191,11 @@ test('editing item quantity to zero on the item page ends its channel listings',
         ->test(Show::class, ['item' => $item])
         ->call('saveField', 'quantity_on_hand', 0)
         ->assertHasNoErrors()
-        ->assertSee('Out of stock');
+        ->assertDispatched(
+            'notify',
+            message: 'Out of stock — ended the listing on 1 channel.',
+            variant: 'success',
+        );
 
     expect(collect(FakeAvailabilityChannel::$calls)->pluck('op')->all())->toBe(['end']);
 });
