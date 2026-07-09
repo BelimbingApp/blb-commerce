@@ -11,6 +11,10 @@ use Illuminate\Support\Carbon;
  * truth), fall back to the `OrderLine->title` captured from the channel, then
  * the channel SKU, then an empty string. `categoryName` is null when the sale
  * isn't linked to an item, or the item isn't categorized.
+ *
+ * Drill-down: prefer `itemId` (inventory workbench). When the sale is still
+ * unlinked, `listingUrl` / `listingId` let the operator open the live channel
+ * listing instead of a dead-end title.
  */
 final readonly class RecentSaleRow
 {
@@ -23,5 +27,7 @@ final readonly class RecentSaleRow
         public string $channel,
         public int $quantity,
         public ?int $saleAmountMinor,
+        public ?int $listingId = null,
+        public ?string $listingUrl = null,
     ) {}
 }

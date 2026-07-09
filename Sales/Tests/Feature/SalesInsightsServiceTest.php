@@ -557,6 +557,36 @@ it('falls back to order line title then sku when no item is linked', function ()
         ->and($rows->pluck('categoryName')->all())->toBe([null, null]);
 });
 
+it('carries the live listing url when a sale is linked to a listing but not an item', function (): void {
+    $company = Company::factory()->create();
+    $listing = Listing::factory()->create([
+        'company_id' => $company->id,
+        'channel' => 'ebay',
+        'item_id' => null,
+        'listing_url' => 'https://www.ebay.com/itm/1234567890',
+    ]);
+
+    Sale::factory()->create([
+        'company_id' => $company->id,
+        'item_id' => null,
+        'listing_id' => $listing->id,
+        'currency_code' => SALES_INSIGHTS_CURRENCY_USD,
+        'sold_at' => Carbon::parse('2026-04-12 10:00:00'),
+    ]);
+
+    $rows = app(SalesInsightsService::class)->salesInPeriod(
+        companyId: $company->id,
+        from: Carbon::parse(SALES_INSIGHTS_FROM),
+        to: Carbon::parse(SALES_INSIGHTS_TO),
+        currencyCode: SALES_INSIGHTS_CURRENCY_USD,
+    );
+
+    expect($rows)->toHaveCount(1)
+        ->and($rows->first()->listingId)->toBe($listing->id)
+        ->and($rows->first()->listingUrl)->toBe('https://www.ebay.com/itm/1234567890')
+        ->and($rows->first()->itemId)->toBeNull();
+});
+
 it('honors the limit when listing recent sales', function (): void {
     $company = Company::factory()->create();
 

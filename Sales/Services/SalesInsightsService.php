@@ -163,7 +163,7 @@ class SalesInsightsService
         ?int $limit = null,
     ): Collection {
         $query = Sale::query()
-            ->with(['item.category', 'orderLine'])
+            ->with(['item.category', 'orderLine', 'listing'])
             ->where('company_id', $companyId)
             ->where('currency_code', $currencyCode)
             ->whereBetween('sold_at', [$from, $to])
@@ -186,6 +186,8 @@ class SalesInsightsService
             channel: $sale->channel,
             quantity: $sale->quantity,
             saleAmountMinor: $sale->sale_amount,
+            listingId: $sale->listing_id,
+            listingUrl: $sale->listing?->listing_url,
         ));
     }
 
