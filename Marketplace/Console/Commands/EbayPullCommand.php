@@ -2,6 +2,7 @@
 
 namespace App\Modules\Commerce\Marketplace\Console\Commands;
 
+use App\Modules\Commerce\Marketplace\Contracts\MarketplaceChannel;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Services\MarketplaceChannelRegistry;
 use App\Modules\Core\Company\Models\Company;
@@ -12,17 +13,24 @@ use Throwable;
 #[AsCommand(name: 'commerce:marketplace:ebay:pull')]
 class EbayPullCommand extends Command
 {
-    protected $description = 'Pull eBay marketplace listings and orders for one or all companies';
+    protected $description = 'Pull eBay marketplace listings and orders for connected companies';
 
     protected $signature = 'commerce:marketplace:ebay:pull
-        {--company-id= : Company ID to pull for. Omit to pull for every company.}
+        {--company-id= : Company ID to pull for. Omit to pull every company connected to eBay.}
         {--orders : Also pull and materialize eBay orders into Commerce Sales.}';
 
     public function handle(MarketplaceChannelRegistry $channels): int
     {
-        $companyIds = $this->companyIds();
-        $exitCode = self::SUCCESS;
         $channel = $channels->channel(EbayConfiguration::CHANNEL);
+        $companyIds = $this->companyIds($channel);
+
+        if ($companyIds === []) {
+            $this->components->info('No companies connected to eBay — nothing to pull.');
+
+            return self::SUCCESS;
+        }
+
+        $exitCode = self::SUCCESS;
 
         foreach ($companyIds as $companyId) {
             try {
@@ -49,18 +57,28 @@ class EbayPullCommand extends Command
     /**
      * @return list<int>
      */
-    private function companyIds(): array
+    private function companyIds(MarketplaceChannel $channel): array
     {
         $companyId = $this->option('company-id');
 
         if ($companyId !== null && $companyId !== '') {
-            return [(int) $companyId];
+            $id = (int) $companyId;
+
+            if (! $channel->isConnected($id)) {
+                $this->components->warn("Company {$id}: skipped — eBay is not connected.");
+
+                return [];
+            }
+
+            return [$id];
         }
 
         return Company::query()
             ->orderBy('id')
             ->pluck('id')
             ->map(fn (mixed $id): int => (int) $id)
+            ->filter(fn (int $id): bool => $channel->isConnected($id))
+            ->values()
             ->all();
     }
 }

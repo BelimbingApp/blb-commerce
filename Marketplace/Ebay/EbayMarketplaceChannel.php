@@ -43,6 +43,11 @@ class EbayMarketplaceChannel implements MarketplaceChannel
         return EbayConfiguration::CHANNEL;
     }
 
+    public function isConnected(int $companyId): bool
+    {
+        return $this->oauth->tokenForCompany($companyId)?->refresh_token !== null;
+    }
+
     public function pullListings(int $companyId): MarketplacePullResult
     {
         $config = $this->configuration->forCompany($companyId);

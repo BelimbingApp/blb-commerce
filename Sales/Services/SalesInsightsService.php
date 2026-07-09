@@ -144,7 +144,7 @@ class SalesInsightsService
     }
 
     /**
-     * Recent Sales as a chronological list (newest first).
+     * Sales page rows as a chronological list (newest first).
      *
      * Unlike {@see soldInPeriod()} which collapses to a single aggregate, this
      * returns one row per sale with its display title resolved at query time —

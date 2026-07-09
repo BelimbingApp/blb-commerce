@@ -109,7 +109,7 @@ class DevSaleSeeder extends DevSeeder
 
     /**
      * Demo sales scattered across the current and prior two months so the
-     * Insights surfaces ("Month-to-Date Sales," upcoming "Top Sellers (90 Days)
+     * Insights surfaces ("Sales," upcoming "Top Sellers (90 Days)
      * days") have something to render under the licensee company.
      *
      * @return list<array<string, mixed>>

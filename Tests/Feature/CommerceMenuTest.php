@@ -18,9 +18,9 @@ test('commerce menu is organized around operator jobs instead of implementation 
         ->and($items['commerce.catalog.attributes']->label)->toBe('Attributes')
         ->and($items['commerce.inventory']->label)->toBe('Inventory')
         ->and($items['commerce.marketplace']->label)->toBe('Marketplace')
-        ->and($items['commerce.sales']->label)->toBe('Sales')
         ->and($items['commerce.reports']->label)->toBe('Reports')
         ->and($items['commerce.settings']->label)->toBe('Settings')
+        ->and($items)->not->toHaveKey('commerce.sales')
         ->and($items)->not->toHaveKey('commerce.ham-auto-parts')
         ->and($items)->not->toHaveKey('commerce.inventory.setting');
 
@@ -33,10 +33,9 @@ test('commerce menu is organized around operator jobs instead of implementation 
         expect($items['commerce.ham-auto-parts.setting']->parent)->toBe('commerce.settings')
             ->and($items['commerce.ham-auto-parts.setting']->label)->toBe('Auto Parts');
 
-        expect($items['commerce.ham-auto-parts.insights.recent-sale']->parent)->toBe('commerce.sales')
-            ->and($items['commerce.ham-auto-parts.insights.recent-sale']->label)->toBe('Recent Sales')
-            ->and($items['commerce.ham-auto-parts.insights.sold-this-month']->parent)->toBe('commerce.reports')
-            ->and($items['commerce.ham-auto-parts.insights.sold-this-month']->label)->toBe('Month-to-Date Sales')
+        expect($items['commerce.ham-auto-parts.insights.recent-sale']->parent)->toBe('commerce.reports')
+            ->and($items['commerce.ham-auto-parts.insights.recent-sale']->label)->toBe('Sales')
+            ->and($items)->not->toHaveKey('commerce.ham-auto-parts.insights.sold-this-month')
             ->and($items['commerce.ham-auto-parts.insights.sales-by-category']->parent)->toBe('commerce.reports')
             ->and($items['commerce.ham-auto-parts.insights.sales-by-category']->label)->toBe('Category Sales')
             ->and($items['commerce.ham-auto-parts.insights.top-earners-last-90-days']->parent)->toBe('commerce.reports')

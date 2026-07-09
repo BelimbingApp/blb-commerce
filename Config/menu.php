@@ -22,11 +22,5 @@ return [
             'icon' => 'heroicon-o-chart-bar',
             'parent' => 'commerce',
         ],
-        [
-            'id' => 'commerce.sales',
-            'label' => 'Sales',
-            'icon' => 'heroicon-o-banknotes',
-            'parent' => 'commerce',
-        ],
     ],
 ];

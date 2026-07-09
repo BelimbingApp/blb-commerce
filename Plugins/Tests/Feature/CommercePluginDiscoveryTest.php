@@ -115,5 +115,5 @@ test('commerce plugin discovery leaves generic commerce usable without nested ex
     expect($registry->workbenchPanels())->toBe([])
         ->and($registry->catalogPresets())->not->toHaveKey('ham.auto-parts.catalog')
         ->and($registry->marketplaceTemplateMappings())->not->toHaveKey('ham.auto-parts.ebay-motors.lighting_headlights')
-        ->and($registry->insightPages())->not->toHaveKey('ham.auto-parts.insights.sold-this-month');
+        ->and($registry->insightPages())->not->toHaveKey('ham.auto-parts.insights.sales');
 });

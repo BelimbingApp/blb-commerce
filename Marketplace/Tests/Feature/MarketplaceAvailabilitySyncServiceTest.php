@@ -26,6 +26,11 @@ class FakeAvailabilityChannel implements MarketplaceChannel
         return 'fake';
     }
 
+    public function isConnected(int $companyId): bool
+    {
+        return true;
+    }
+
     public function pullListings(int $companyId): MarketplacePullResult
     {
         return new MarketplacePullResult('fake', 0, 0, 0, 0);

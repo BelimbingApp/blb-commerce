@@ -13,6 +13,7 @@ use App\Modules\Commerce\Marketplace\Ebay\EbayMarketplaceChannelProvider;
 use App\Modules\Commerce\Marketplace\Services\MarketplaceChannelRegistry;
 use App\Modules\Commerce\Plugins\Services\CommercePluginDiscoveryService;
 use App\Modules\Commerce\Plugins\Services\CommercePluginRegistry;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\ServiceProvider as BaseServiceProvider;
 
 class ServiceProvider extends BaseServiceProvider
@@ -49,6 +50,26 @@ class ServiceProvider extends BaseServiceProvider
                 EbayAccountSetupCommand::class,
             ]);
         }
+
+        // Register on booted() (not bootstrap/app.php withSchedule): Laravel's
+        // withSchedule only attaches when Artisan starts, so the admin Scheduled
+        // Tasks page would otherwise omit these while schedule:list still showed them.
+        $this->app->booted(function (): void {
+            $schedule = $this->app->make(Schedule::class);
+
+            // Order-pull backstop: webhooks deliver sales in near real time; this
+            // incremental, idempotent poll catches anything a webhook missed.
+            $schedule->command('commerce:marketplace:ebay:pull --orders')
+                ->cron((string) config('commerce-marketplace.order_poll_cron', '*/15 * * * *'))
+                ->withoutOverlapping();
+
+            // Cached eBay category rules stay current without a manual refresh:
+            // mapping saves refresh their category immediately; this nightly sweep
+            // covers everything mapped.
+            $schedule->command('commerce:marketplace:ebay:metadata-refresh')
+                ->cron((string) config('commerce-marketplace.metadata_refresh_cron', '0 3 * * *'))
+                ->withoutOverlapping();
+        });
     }
 
     /**

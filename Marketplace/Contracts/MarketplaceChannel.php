@@ -11,6 +11,13 @@ interface MarketplaceChannel
 {
     public function key(): string;
 
+    /**
+     * Whether this company has a usable account for the channel (OAuth token,
+     * API credentials, etc.). Multi-tenant schedulers should only pull for
+     * connected companies — a Shopee-only tenant must not fail an eBay tick.
+     */
+    public function isConnected(int $companyId): bool;
+
     public function pullListings(int $companyId): MarketplacePullResult;
 
     public function pullOrders(int $companyId): MarketplacePullResult;

@@ -29,6 +29,14 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                     {{ __('Settings') }}
                 </x-ui.button>
             </x-slot>
+            <x-slot name="help">
+                <div class="space-y-3">
+                    <p>{{ __('An eBay listing is the storefront row on eBay — title, price, and quantity buyers see. A Belimbing item is your inventory record: SKU, cost, attributes, and stock.') }}</p>
+                    <p>{{ __('Linking connects a listing to an inventory item so you can edit and push from Belimbing, track stock, and attribute sales to the right SKU.') }}</p>
+                    <p>{{ __('Pull from eBay imports listings and recent orders via the Inventory API. Rows that are not linked yet need Adopt — that finds or creates the matching Belimbing item and connects it.') }}</p>
+                    <p>{{ __('Import from Seller Hub is a picker for active listings Pull may miss (older Seller Hub / Trading API listings). Ready to list shows Belimbing inventory not on eBay yet.') }}</p>
+                </div>
+            </x-slot>
         </x-ui.page-header>
 
         @if (session('success'))
@@ -61,9 +69,9 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                             <span wire:loading wire:target="pullFromEbay">{{ __('Queueing…') }}</span>
                         </x-ui.button>
 
-                        <x-ui.button type="button" variant="ghost" wire:click="openImportModal" title="{{ __('Pick from your eBay store — including listings the normal pull cannot see') }}">
+                        <x-ui.button type="button" variant="ghost" wire:click="openImportModal" title="{{ __('Pick listings from Seller Hub that Pull may miss (Trading API)') }}">
                             <x-icon name="mdi-import" class="h-4 w-4" />
-                            {{ __('Import existing listings') }}
+                            {{ __('Import from Seller Hub') }}
                         </x-ui.button>
                     @else
                         <x-ui.button variant="primary" as="a" href="{{ route('commerce.marketplace.ebay.settings') }}" wire:navigate>
@@ -119,6 +127,8 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                         </div>
                     </div>
 
+                    <p class="mb-4 text-xs text-muted">{{ __('Linked = connected to a Belimbing inventory item. Adopt creates that link so you can edit & push from here.') }}</p>
+
                     <x-ui.table container="flush" :caption="__('Your eBay listings')">
                         <x-slot name="head">
                             <tr>
@@ -156,7 +166,7 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
                                         <div class="mt-1 max-w-sm truncate text-xs text-muted">{{ $listing->item->title }}</div>
                                     @else
                                         <x-ui.badge variant="warning">{{ __('Not linked') }}</x-ui.badge>
-                                        <div class="mt-1 text-xs text-muted">{{ __('Use Adopt to create a linked item.') }}</div>
+                                        <div class="mt-1 text-xs text-muted">{{ __('No inventory item yet — Adopt matches or creates one and links it.') }}</div>
                                     @endif
                                 </td>
                                 <td class="px-table-cell-x py-table-cell-y whitespace-nowrap">
@@ -297,8 +307,8 @@ use App\Modules\Commerce\Marketplace\Livewire\Ebay\Index;
         <x-ui.modal wire:model="showImportModal">
             <div class="space-y-4">
                 <div>
-                    <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Import existing eBay listings') }}</h2>
-                    <p class="mt-1 text-sm text-muted">{{ __('Load your live eBay store and pick which listings to import — including ones created in Seller Hub that a normal pull cannot see.') }}</p>
+                    <h2 class="text-base font-medium tracking-tight text-ink">{{ __('Import from Seller Hub') }}</h2>
+                    <p class="mt-1 text-sm text-muted">{{ __('Pull uses eBay’s Inventory API and can miss older Seller Hub listings. This loads your active store via the Trading API so you can pick which ones to bring into Belimbing.') }}</p>
                 </div>
 
                 @if (! $listingsLoaded)
