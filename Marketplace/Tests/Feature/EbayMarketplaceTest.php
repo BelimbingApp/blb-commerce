@@ -550,6 +550,26 @@ test('ebay marketplace pull from eBay queues a background job', function (): voi
     Bus::assertDispatched(PullFromEbayJob::class, fn (PullFromEbayJob $job): bool => $job->companyId === $user->company_id);
 });
 
+test('ebay marketplace page surfaces a completed pull notice without writing null settings', function (): void {
+    $user = createAdminUser();
+    $this->actingAs($user);
+
+    $scope = Scope::company($user->company_id);
+    $settings = app(SettingsService::class);
+    $settings->set('commerce.marketplace.ebay.last_pull_status', 'success', $scope);
+    $settings->set('commerce.marketplace.ebay.last_pull_message', 'Pulled from eBay — 1 listings (1 new, 0 updated) and 0 orders (0 new).', $scope);
+    $settings->set('commerce.marketplace.ebay.last_pull_at', now()->utc()->toIso8601String(), $scope);
+
+    Livewire::actingAs($user)
+        ->test(MarketplaceIndex::class)
+        ->assertHasNoErrors()
+        ->assertDispatched('notify', fn ($event, $params) => str_contains((string) ($params['message'] ?? ''), 'Pulled from eBay'));
+
+    expect($settings->has('commerce.marketplace.ebay.last_pull_status', $scope))->toBeFalse()
+        ->and($settings->has('commerce.marketplace.ebay.last_pull_message', $scope))->toBeFalse()
+        ->and($settings->has('commerce.marketplace.ebay.last_pull_at', $scope))->toBeFalse();
+});
+
 test('ebay store pull fetches listings orders and mirrors the active set', function (): void {
     $user = createAdminUser();
     $this->actingAs($user);

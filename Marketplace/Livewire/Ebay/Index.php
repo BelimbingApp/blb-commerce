@@ -66,7 +66,18 @@ class Index extends Component
 
     public function mount(SettingsService $settings): void
     {
-        $lastPullNotice = $this->consumeLastPullNotice($settings, $this->companyId());
+        // Never let a stale pull notice take the page down — the marketplace
+        // screen must stay usable even if notice storage is corrupt.
+        try {
+            $lastPullNotice = $this->consumeLastPullNotice($settings, $this->companyId());
+        } catch (Throwable $exception) {
+            blb_log_var([
+                'company_id' => $this->companyId(),
+                'error' => $exception->getMessage(),
+            ], 'ebay-pull.log', [], 'error');
+
+            return;
+        }
 
         if ($lastPullNotice !== null) {
             match ($lastPullNotice['status']) {
@@ -518,11 +529,16 @@ class Index extends Component
             return null;
         }
 
-        $settings->set('commerce.marketplace.ebay.last_pull_status', null, $scope);
-        $settings->set('commerce.marketplace.ebay.last_pull_message', null, $scope);
-        $settings->set('commerce.marketplace.ebay.last_pull_at', null, $scope);
+        // base_settings.value is NOT NULL — clear via forget(), never set(null).
+        $settings->forget('commerce.marketplace.ebay.last_pull_status', $scope);
+        $settings->forget('commerce.marketplace.ebay.last_pull_message', $scope);
+        $settings->forget('commerce.marketplace.ebay.last_pull_at', $scope);
 
-        if (Carbon::parse($pulledAt)->lt(Carbon::now()->subDay())) {
+        try {
+            if (Carbon::parse($pulledAt)->lt(Carbon::now()->subDay())) {
+                return null;
+            }
+        } catch (Throwable) {
             return null;
         }
 
