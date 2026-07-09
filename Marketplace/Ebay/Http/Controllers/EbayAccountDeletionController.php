@@ -5,7 +5,6 @@ namespace App\Modules\Commerce\Marketplace\Ebay\Http\Controllers;
 use App\Base\Settings\Contracts\SettingsService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 
 /**
  * Public endpoint for eBay's mandatory marketplace-account-deletion
@@ -27,6 +26,8 @@ use Illuminate\Support\Str;
  */
 class EbayAccountDeletionController
 {
+    private const MAX_LOGGED_TOPIC_BYTES = 120;
+
     /**
      * Cap on the notification body written to the log. eBay's payloads are
      * small; bounding what we persist stops an unauthenticated caller from
@@ -68,19 +69,24 @@ class EbayAccountDeletionController
         // is tracked as residual hardening (needs eBay's live public key).
         $rawBody = (string) $request->getContent();
 
-        $singleLine = static fn (string $value): string => (string) preg_replace('/[\r\n]+/', ' ', $value);
-
         blb_log_var(
             'eBay account-deletion notification received.',
             'ebay-account-deletion.log',
             [
-                'topic' => Str::limit($singleLine((string) $request->json('metadata.topic', '')), 120),
-                'body' => Str::limit($singleLine($rawBody), self::MAX_LOGGED_BODY_BYTES),
+                'topic' => self::singleLineForLog((string) $request->json('metadata.topic', ''), self::MAX_LOGGED_TOPIC_BYTES),
+                'body' => self::singleLineForLog($rawBody, self::MAX_LOGGED_BODY_BYTES),
                 'body_bytes' => strlen($rawBody),
                 'ebay_signature_present' => $request->hasHeader('x-ebay-signature'),
             ],
         );
 
         return response()->json(['received' => true]);
+    }
+
+    private static function singleLineForLog(string $value, int $maxBytes): string
+    {
+        $singleLine = (string) preg_replace('/[\r\n]+/', ' ', $value);
+
+        return substr($singleLine, 0, $maxBytes);
     }
 }

@@ -3,23 +3,34 @@
 use App\Base\Settings\Contracts\SettingsService;
 use Illuminate\Support\Facades\File;
 
-function configureHardeningWebhook(): void
+function configureEbayDeletionHardeningWebhook(): void
 {
     $settings = app(SettingsService::class);
     $settings->set('commerce.marketplace.ebay.deletion_verification_token', 'a-verification-token-of-sufficient-length');
     $settings->set('commerce.marketplace.ebay.deletion_endpoint_url', 'https://edge.example.test/webhooks/ebay/account-deletion');
 }
 
-function deletionLogPath(): string
+function ebayDeletionHardeningLogPath(): string
 {
     return storage_path('logs/ebay-account-deletion.log');
 }
 
-beforeEach(function (): void {
-    configureHardeningWebhook();
+/**
+ * @return array<string, mixed>
+ */
+function latestEbayDeletionHardeningLogContext(): array
+{
+    $logged = File::exists(ebayDeletionHardeningLogPath()) ? trim(File::get(ebayDeletionHardeningLogPath())) : '';
+    preg_match('/\s(\{.*\})$/', $logged, $matches);
 
-    if (File::exists(deletionLogPath())) {
-        File::delete(deletionLogPath());
+    return json_decode($matches[1] ?? '[]', true, flags: JSON_THROW_ON_ERROR);
+}
+
+beforeEach(function (): void {
+    configureEbayDeletionHardeningWebhook();
+
+    if (File::exists(ebayDeletionHardeningLogPath())) {
+        File::delete(ebayDeletionHardeningLogPath());
     }
 });
 
@@ -31,23 +42,42 @@ test('an oversized notification body is truncated in the log', function (): void
         'blob' => $huge,
     ])->assertOk()->assertExactJson(['received' => true]);
 
-    $logged = File::exists(deletionLogPath()) ? File::get(deletionLogPath()) : '';
+    $logged = File::exists(ebayDeletionHardeningLogPath()) ? File::get(ebayDeletionHardeningLogPath()) : '';
+    $context = latestEbayDeletionHardeningLogContext();
 
     // The full 50k body is never persisted; the cap keeps the record small.
-    expect(strlen($logged))->toBeLessThan(10_000)
+    expect(strlen((string) $context['body']))->toBe(4096)
+        ->and($logged)->not->toContain(str_repeat('A', 4097))
         ->and($logged)->toContain('body_bytes');
 });
 
-test('a crafted body cannot inject extra log lines', function (): void {
-    $this->postJson(route('commerce.marketplace.ebay.webhooks.account-deletion'), [
-        'metadata' => ['topic' => "evil\ninjected fake log line"],
-    ])->assertOk();
+test('a crafted body cannot inject physical log lines', function (): void {
+    $body = <<<'JSON'
+{
+  "metadata": {
+    "topic": "evil\ninjected fake log line"
+  }
+}
+JSON;
 
-    $logged = File::exists(deletionLogPath()) ? File::get(deletionLogPath()) : '';
+    $this->call(
+        'POST',
+        route('commerce.marketplace.ebay.webhooks.account-deletion'),
+        server: [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_ACCEPT' => 'application/json',
+        ],
+        content: $body,
+    )->assertOk();
 
-    // The newline is JSON-escaped, so it cannot forge a standalone log entry.
-    expect($logged)->not->toContain("\ninjected fake log line")
-        ->and($logged)->toContain('injected fake log line');
+    $logged = File::exists(ebayDeletionHardeningLogPath()) ? File::get(ebayDeletionHardeningLogPath()) : '';
+    $context = latestEbayDeletionHardeningLogContext();
+
+    // The log record stays physically one line even when the raw body contains
+    // real newlines and a decoded field contains an escaped newline.
+    expect(preg_split('/\R/', trim($logged)))->toHaveCount(1)
+        ->and($context['body'])->not->toContain("\n")
+        ->and($context['topic'])->toBe('evil injected fake log line');
 });
 
 test('the endpoint is rate limited', function (): void {

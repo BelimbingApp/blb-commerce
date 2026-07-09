@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Sales\Http\Controllers;
 
 use App\Base\Foundation\ValueObjects\Money;

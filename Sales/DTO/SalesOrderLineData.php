@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Sales\DTO;
 
 final readonly class SalesOrderLineData

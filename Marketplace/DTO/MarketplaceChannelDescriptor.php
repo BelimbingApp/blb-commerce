@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Marketplace\DTO;
 
 use App\Modules\Commerce\Marketplace\Contracts\MarketplaceChannel;

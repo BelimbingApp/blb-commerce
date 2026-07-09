@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Modules\Commerce\Sales\Database\Factories;
 
 use App\Modules\Commerce\Sales\Models\Order;
