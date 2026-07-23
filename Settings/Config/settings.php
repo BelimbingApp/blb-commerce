@@ -4,6 +4,7 @@ return [
     'editable' => [
         'commerce' => [
             'label' => 'Commerce',
+            'capability' => 'commerce.inventory.manage',
             'description' => 'Company-level defaults used by Commerce records before channel-specific data exists.',
             'fields' => [
                 [

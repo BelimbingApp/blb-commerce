@@ -6,6 +6,7 @@ use App\Base\Authz\Models\Role;
 use App\Base\Integration\Services\OAuthTokenStore;
 use App\Base\Settings\Contracts\SettingsService;
 use App\Base\Settings\DTO\Scope;
+use App\Base\Settings\Models\Setting;
 use App\Modules\Commerce\Catalog\Models\ProductTemplate;
 use App\Modules\Commerce\Marketplace\Ebay\EbayConfiguration;
 use App\Modules\Commerce\Marketplace\Ebay\EbayDiagnosticsService;
@@ -112,7 +113,7 @@ test('eBay settings imports seller setup choices and stores selected defaults', 
     $settings->set('commerce.marketplace.ebay.environment', 'sandbox', $scope);
     $settings->set('commerce.marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
     $settings->set('commerce.marketplace.ebay.client_id', 'client-setup-import', $scope);
-    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-setup-import', $scope, encrypted: true);
+    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-setup-import', $scope);
     $settings->set('commerce.marketplace.ebay.ru_name', 'KiatNg-Belimbin-SBX-runame', $scope);
     $settings->set('commerce.marketplace.ebay.scopes', [
         EBAY_SCOPE_ACCOUNT,
@@ -188,7 +189,7 @@ test('eBay settings opts in, creates a merchant location, and creates starter po
     $settings->set('commerce.marketplace.ebay.environment', 'sandbox', $scope);
     $settings->set('commerce.marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
     $settings->set('commerce.marketplace.ebay.client_id', 'client-acct-actions', $scope);
-    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-acct-actions', $scope, encrypted: true);
+    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-acct-actions', $scope);
 
     app(OAuthTokenStore::class)->persist(
         EbayConfiguration::CHANNEL,
@@ -253,7 +254,7 @@ test('eBay settings updates an existing location address instead of failing or d
     $settings->set('commerce.marketplace.ebay.environment', 'sandbox', $scope);
     $settings->set('commerce.marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
     $settings->set('commerce.marketplace.ebay.client_id', 'client-loc-update', $scope);
-    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-loc-update', $scope, encrypted: true);
+    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-loc-update', $scope);
 
     app(OAuthTokenStore::class)->persist(
         EbayConfiguration::CHANNEL,
@@ -365,7 +366,7 @@ test('eBay settings saves a manual category mapping instantly and resolves the t
     $scope = Scope::company($user->company_id);
     $settings = app(SettingsService::class);
     $settings->set('commerce.marketplace.ebay.client_id', 'client-manual-test', $scope);
-    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-manual-test', $scope, encrypted: true);
+    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-manual-test', $scope);
 
     app(OAuthTokenStore::class)->persist(
         EbayConfiguration::CHANNEL,
@@ -414,7 +415,7 @@ test('eBay settings finds categories by name and applies the chosen suggestion',
     $scope = Scope::company($user->company_id);
     $settings = app(SettingsService::class);
     $settings->set('commerce.marketplace.ebay.client_id', 'client-suggest-test', $scope);
-    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-suggest-test', $scope, encrypted: true);
+    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-suggest-test', $scope);
 
     app(OAuthTokenStore::class)->persist(
         EbayConfiguration::CHANNEL,
@@ -475,11 +476,13 @@ test('eBay settings normalizes legacy whitespace scopes into checkbox values', f
     $user = createAdminUser();
     $scope = Scope::company($user->company_id);
 
-    app(SettingsService::class)->set(
-        'commerce.marketplace.ebay.scopes',
-        EBAY_SCOPE_INVENTORY."\n".EBAY_SCOPE_FULFILLMENT,
-        $scope,
-    );
+    Setting::query()->create([
+        'key' => 'commerce.marketplace.ebay.scopes',
+        'value' => EBAY_SCOPE_INVENTORY."\n".EBAY_SCOPE_FULFILLMENT,
+        'is_encrypted' => false,
+        'scope_type' => $scope->type->value,
+        'scope_id' => $scope->id,
+    ]);
 
     $this->actingAs($user);
 
@@ -497,12 +500,7 @@ test('eBay client secret field can reveal the saved Cert ID when configured', fu
     $user = createAdminUser();
     $scope = Scope::company($user->company_id);
 
-    app(SettingsService::class)->set(
-        'commerce.marketplace.ebay.client_secret',
-        'client-secret-1234567890',
-        $scope,
-        encrypted: true,
-    );
+    app(SettingsService::class)->set('commerce.marketplace.ebay.client_secret', 'client-secret-1234567890', $scope);
 
     $this->actingAs($user);
 
@@ -519,7 +517,7 @@ test('eBay OAuth authorize URL uses the eBay RuName instead of the callback URL'
     $settings->set('commerce.marketplace.ebay.environment', 'sandbox', $scope);
     $settings->set('commerce.marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
     $settings->set('commerce.marketplace.ebay.client_id', 'client-oauth-url', $scope);
-    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-oauth-url', $scope, encrypted: true);
+    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-oauth-url', $scope);
     $settings->set('commerce.marketplace.ebay.ru_name', 'KiatNg-Belimbin-SBX-runame', $scope);
     $settings->set('commerce.marketplace.ebay.scopes', [EBAY_SCOPE_ACCOUNT], $scope);
 
@@ -541,7 +539,7 @@ test('eBay settings diagnostics verifies the saved OAuth grant against a safe Ac
     $settings->set('commerce.marketplace.ebay.environment', 'sandbox', $scope);
     $settings->set('commerce.marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
     $settings->set('commerce.marketplace.ebay.client_id', 'client-connection-test', $scope);
-    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-connection-test', $scope, encrypted: true);
+    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-connection-test', $scope);
     $settings->set('commerce.marketplace.ebay.ru_name', 'KiatNg-Belimbin-SBX-runame', $scope);
     $settings->set('commerce.marketplace.ebay.scopes', [
         EBAY_SCOPE_ACCOUNT,
@@ -597,7 +595,7 @@ test('eBay settings diagnostics explains when OAuth has not been connected yet',
     $settings->set('commerce.marketplace.ebay.environment', 'sandbox', $scope);
     $settings->set('commerce.marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
     $settings->set('commerce.marketplace.ebay.client_id', 'client-without-oauth', $scope);
-    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-without-oauth', $scope, encrypted: true);
+    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-without-oauth', $scope);
     $settings->set('commerce.marketplace.ebay.ru_name', 'KiatNg-Belimbin-SBX-runame', $scope);
     $settings->set('commerce.marketplace.ebay.scopes', [
         EBAY_SCOPE_ACCOUNT,
@@ -634,7 +632,7 @@ function seedConnectedEbay(User $user, array $scopes): void
     $settings->set('commerce.marketplace.ebay.environment', 'sandbox', $scope);
     $settings->set('commerce.marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
     $settings->set('commerce.marketplace.ebay.client_id', 'client-diagnostics', $scope);
-    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-diagnostics', $scope, encrypted: true);
+    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-diagnostics', $scope);
     $settings->set('commerce.marketplace.ebay.ru_name', 'KiatNg-Belimbin-SBX-runame', $scope);
     $settings->set('commerce.marketplace.ebay.scopes', $scopes, $scope);
 

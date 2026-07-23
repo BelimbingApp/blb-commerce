@@ -15,7 +15,7 @@ function configureEbayAccountSetupEnvironment(int $companyId): void
     $settings->set('commerce.marketplace.ebay.environment', 'sandbox', $scope);
     $settings->set('commerce.marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
     $settings->set('commerce.marketplace.ebay.client_id', 'client-setup-test', $scope);
-    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-setup-test', $scope, encrypted: true);
+    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-setup-test', $scope);
     $settings->set('commerce.marketplace.ebay.redirect_uri', 'https://blb.test/commerce/marketplace/ebay/oauth/callback', $scope);
 
     app(OAuthTokenStore::class)->persist(
@@ -50,10 +50,10 @@ test('account setup is idempotent when already opted in with existing policies a
 
     $scope = Scope::company($user->company_id);
     $settings = app(SettingsService::class);
-    expect($settings->get('commerce.marketplace.ebay.default_payment_policy_id', null, $scope))->toBe('PAY-1')
-        ->and($settings->get('commerce.marketplace.ebay.default_return_policy_id', null, $scope))->toBe('RET-1')
-        ->and($settings->get('commerce.marketplace.ebay.default_fulfillment_policy_id', null, $scope))->toBe('FUL-1')
-        ->and($settings->get('commerce.marketplace.ebay.default_merchant_location_key', null, $scope))->toBe('california_shop');
+    expect($settings->get('commerce.marketplace.ebay.default_payment_policy_id', $scope))->toBe('PAY-1')
+        ->and($settings->get('commerce.marketplace.ebay.default_return_policy_id', $scope))->toBe('RET-1')
+        ->and($settings->get('commerce.marketplace.ebay.default_fulfillment_policy_id', $scope))->toBe('FUL-1')
+        ->and($settings->get('commerce.marketplace.ebay.default_merchant_location_key', $scope))->toBe('california_shop');
 
     // Idempotent: no opt-in, policy-create, or location-create writes happen.
     Http::assertNotSent(fn (Request $request): bool => Str::contains($request->url(), '/program/opt_in'));
@@ -92,10 +92,10 @@ test('account setup opts in and creates default policies and location when missi
 
     $scope = Scope::company($user->company_id);
     $settings = app(SettingsService::class);
-    expect($settings->get('commerce.marketplace.ebay.default_payment_policy_id', null, $scope))->toBe('NEW-PAY')
-        ->and($settings->get('commerce.marketplace.ebay.default_return_policy_id', null, $scope))->toBe('NEW-RET')
-        ->and($settings->get('commerce.marketplace.ebay.default_fulfillment_policy_id', null, $scope))->toBe('NEW-FUL')
-        ->and($settings->get('commerce.marketplace.ebay.default_merchant_location_key', null, $scope))->toBe('warehouse');
+    expect($settings->get('commerce.marketplace.ebay.default_payment_policy_id', $scope))->toBe('NEW-PAY')
+        ->and($settings->get('commerce.marketplace.ebay.default_return_policy_id', $scope))->toBe('NEW-RET')
+        ->and($settings->get('commerce.marketplace.ebay.default_fulfillment_policy_id', $scope))->toBe('NEW-FUL')
+        ->and($settings->get('commerce.marketplace.ebay.default_merchant_location_key', $scope))->toBe('warehouse');
 
     Http::assertSent(fn (Request $request): bool => $request->method() === 'POST'
         && str_contains($request->url(), '/program/opt_in')

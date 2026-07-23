@@ -16,7 +16,7 @@ function configureEbayApplicationTokenEnvironment(int $companyId): void
     $settings->set('commerce.marketplace.ebay.environment', 'sandbox', $scope);
     $settings->set('commerce.marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
     $settings->set('commerce.marketplace.ebay.client_id', 'client-application-test', $scope);
-    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-application-test', $scope, encrypted: true);
+    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-application-test', $scope);
 }
 
 test('requests and stores an eBay application token for metadata APIs', function (): void {

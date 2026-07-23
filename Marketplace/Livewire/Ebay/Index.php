@@ -521,9 +521,9 @@ class Index extends Component
     private function consumeLastPullNotice(SettingsService $settings, int $companyId): ?array
     {
         $scope = Scope::company($companyId);
-        $status = $settings->get('commerce.marketplace.ebay.last_pull_status', null, $scope);
-        $message = $settings->get('commerce.marketplace.ebay.last_pull_message', null, $scope);
-        $pulledAt = $settings->get('commerce.marketplace.ebay.last_pull_at', null, $scope);
+        $status = $settings->get('commerce.marketplace.ebay.last_pull_status', $scope);
+        $message = $settings->get('commerce.marketplace.ebay.last_pull_message', $scope);
+        $pulledAt = $settings->get('commerce.marketplace.ebay.last_pull_at', $scope);
 
         if (! is_string($status) || ! is_string($message) || ! is_string($pulledAt) || trim($message) === '') {
             return null;

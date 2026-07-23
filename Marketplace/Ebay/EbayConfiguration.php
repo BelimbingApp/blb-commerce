@@ -68,11 +68,11 @@ class EbayConfiguration
     public function forCompany(int $companyId): array
     {
         $scope = Scope::company($companyId);
-        $environment = (string) $this->settings->get('commerce.marketplace.ebay.environment', 'sandbox', $scope);
+        $environment = (string) $this->settings->get('commerce.marketplace.ebay.environment', $scope);
 
         return [
             'environment' => $environment,
-            'marketplace_id' => strtoupper((string) $this->settings->get('commerce.marketplace.ebay.marketplace_id', self::DEFAULT_LISTING_MARKETPLACE_ID, $scope)),
+            'marketplace_id' => strtoupper((string) $this->settings->get('commerce.marketplace.ebay.marketplace_id', $scope)),
             'client_id' => $this->nullableSetting('commerce.marketplace.ebay.client_id', $scope),
             'client_secret' => $this->nullableSetting('commerce.marketplace.ebay.client_secret', $scope),
             'redirect_uri' => $this->nullableSetting('commerce.marketplace.ebay.ru_name', $scope),
@@ -133,7 +133,7 @@ class EbayConfiguration
 
     private function nullableSetting(string $key, Scope $scope): ?string
     {
-        $value = $this->settings->get($key, null, $scope);
+        $value = $this->settings->get($key, $scope);
 
         return is_string($value) && trim($value) !== ''
             ? trim($value)
@@ -145,7 +145,7 @@ class EbayConfiguration
      */
     private function scopes(Scope $scope): array
     {
-        $raw = $this->settings->get('commerce.marketplace.ebay.scopes', '', $scope);
+        $raw = $this->settings->get('commerce.marketplace.ebay.scopes', $scope);
         $parts = is_array($raw)
             ? $raw
             : preg_split('/\s+/', trim((string) $raw));

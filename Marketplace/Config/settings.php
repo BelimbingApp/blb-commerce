@@ -11,6 +11,7 @@ return [
     'editable' => [
         'commerce_marketplace_ebay' => [
             'label' => 'eBay',
+            'capability' => 'commerce.marketplace.manage',
             'description' => 'Connect the eBay marketplace channel: app credentials and OAuth scopes, seller defaults, and template category mappings.',
             'help_title' => 'How to configure eBay OAuth',
             'help_intro' => 'You will switch between Belimbing and the eBay Developer Console. First copy the app keys into Belimbing, then open eBay’s <code>User Tokens</code> page to configure the sign-in callback and copy back the generated <code>RuName</code>.',

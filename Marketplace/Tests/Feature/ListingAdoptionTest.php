@@ -241,7 +241,7 @@ function configureEbayForAdoption(int $companyId): void
     $settings->set('commerce.marketplace.ebay.environment', 'sandbox', $scope);
     $settings->set('commerce.marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
     $settings->set('commerce.marketplace.ebay.client_id', 'client-123', $scope);
-    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-456', $scope, encrypted: true);
+    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-456', $scope);
 
     app(OAuthTokenStore::class)->persist(
         EbayConfiguration::CHANNEL,

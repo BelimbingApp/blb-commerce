@@ -17,7 +17,7 @@ function configureEbayLocationsEnvironment(int $companyId): void
     $settings->set('commerce.marketplace.ebay.environment', 'sandbox', $scope);
     $settings->set('commerce.marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
     $settings->set('commerce.marketplace.ebay.client_id', 'client-locations-test', $scope);
-    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-locations-test', $scope, encrypted: true);
+    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-locations-test', $scope);
     $settings->set('commerce.marketplace.ebay.redirect_uri', 'https://blb.test/commerce/marketplace/ebay/oauth/callback', $scope);
 
     app(OAuthTokenStore::class)->persist(

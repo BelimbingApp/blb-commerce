@@ -18,7 +18,7 @@ class DefaultCurrencyResolver
     public function forCompany(?int $companyId): string
     {
         $scope = $companyId === null ? null : Scope::company($companyId);
-        $currencyCode = $this->settings->get(self::SETTINGS_KEY, self::FALLBACK, $scope);
+        $currencyCode = $this->settings->get(self::SETTINGS_KEY, $scope);
 
         if (! is_string($currencyCode)) {
             return self::FALLBACK;

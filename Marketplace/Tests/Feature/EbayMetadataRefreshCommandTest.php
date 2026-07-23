@@ -20,7 +20,7 @@ function configureEbayMetadataRefreshCommandEnvironment(int $companyId): void
     $settings->set('commerce.marketplace.ebay.environment', 'sandbox', $scope);
     $settings->set('commerce.marketplace.ebay.marketplace_id', 'EBAY_US', $scope);
     $settings->set('commerce.marketplace.ebay.client_id', 'client-metadata-command-test', $scope);
-    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-metadata-command-test', $scope, encrypted: true);
+    $settings->set('commerce.marketplace.ebay.client_secret', 'secret-metadata-command-test', $scope);
 
     app(OAuthTokenStore::class)->persist(
         EbayConfiguration::CHANNEL,

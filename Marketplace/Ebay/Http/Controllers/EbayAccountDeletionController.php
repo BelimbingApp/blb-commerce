@@ -37,7 +37,7 @@ class EbayAccountDeletionController
 
     public function __invoke(Request $request, SettingsService $settings): JsonResponse
     {
-        $token = (string) $settings->get('commerce.marketplace.ebay.deletion_verification_token', '');
+        $token = (string) $settings->get('commerce.marketplace.ebay.deletion_verification_token');
 
         if (trim($token) === '') {
             // Unconfigured endpoints must not answer the handshake: a 503 keeps
@@ -53,7 +53,7 @@ class EbayAccountDeletionController
                 return response()->json(['error' => 'Missing challenge_code.'], 400);
             }
 
-            $endpointUrl = (string) $settings->get('commerce.marketplace.ebay.deletion_endpoint_url', '');
+            $endpointUrl = (string) $settings->get('commerce.marketplace.ebay.deletion_endpoint_url');
 
             return response()->json([
                 'challengeResponse' => hash('sha256', $challengeCode.$token.$endpointUrl),

@@ -108,7 +108,7 @@ class Settings extends SettingsForm
         $this->loadAccountSetupDefaults($settings);
         $this->loadTemplateCategoryMappings();
 
-        $optedIn = $settings->get('commerce.marketplace.ebay.business_policies_opted_in', null, Scope::company($this->companyId()));
+        $optedIn = $settings->get('commerce.marketplace.ebay.business_policies_opted_in', Scope::company($this->companyId()));
         $this->businessPoliciesOptedIn = is_bool($optedIn) ? $optedIn : null;
 
         $this->newLocationStateOptions = $this->locationStateOptions($this->newLocationCountry);
@@ -561,7 +561,7 @@ class Settings extends SettingsForm
 
     private function loadDiagnostics(SettingsService $settings): void
     {
-        $stored = $settings->get(EbayDiagnosticsService::SETTINGS_KEY, null, Scope::company($this->companyId()));
+        $stored = $settings->get(EbayDiagnosticsService::SETTINGS_KEY, Scope::company($this->companyId()));
 
         $this->diagnostics = is_array($stored) ? $stored : [];
     }
@@ -570,10 +570,10 @@ class Settings extends SettingsForm
     {
         $scope = Scope::company($this->companyId());
 
-        $this->defaultPaymentPolicyId = $this->nullableDefault($settings->get('commerce.marketplace.ebay.default_payment_policy_id', null, $scope));
-        $this->defaultFulfillmentPolicyId = $this->nullableDefault($settings->get('commerce.marketplace.ebay.default_fulfillment_policy_id', null, $scope));
-        $this->defaultReturnPolicyId = $this->nullableDefault($settings->get('commerce.marketplace.ebay.default_return_policy_id', null, $scope));
-        $this->defaultMerchantLocationKey = $this->nullableDefault($settings->get('commerce.marketplace.ebay.default_merchant_location_key', null, $scope));
+        $this->defaultPaymentPolicyId = $this->nullableDefault($settings->get('commerce.marketplace.ebay.default_payment_policy_id', $scope));
+        $this->defaultFulfillmentPolicyId = $this->nullableDefault($settings->get('commerce.marketplace.ebay.default_fulfillment_policy_id', $scope));
+        $this->defaultReturnPolicyId = $this->nullableDefault($settings->get('commerce.marketplace.ebay.default_return_policy_id', $scope));
+        $this->defaultMerchantLocationKey = $this->nullableDefault($settings->get('commerce.marketplace.ebay.default_merchant_location_key', $scope));
     }
 
     /**

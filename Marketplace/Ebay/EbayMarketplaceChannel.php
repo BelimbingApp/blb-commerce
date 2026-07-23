@@ -481,7 +481,7 @@ class EbayMarketplaceChannel implements MarketplaceChannel
     {
         $query = ['limit' => $limit, 'offset' => $offset];
 
-        $watermark = $this->settings->get('commerce.marketplace.ebay.orders_synced_through', null, $scope);
+        $watermark = $this->settings->get('commerce.marketplace.ebay.orders_synced_through', $scope);
 
         if (is_string($watermark) && trim($watermark) !== '') {
             $since = Carbon::parse($watermark)->subMinutes(5)->utc()->format(self::EBAY_DATE_FORMAT);

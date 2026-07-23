@@ -193,7 +193,7 @@ class EbayListingReadinessService
 
     private function nullableSetting(string $key, Scope $scope): ?string
     {
-        $value = $this->settings->get($key, null, $scope);
+        $value = $this->settings->get($key, $scope);
 
         return is_string($value) && trim($value) !== '' ? trim($value) : null;
     }
